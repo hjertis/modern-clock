@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" width="50" height="50">
+  <defs>
+    <!-- Lathe-Turned Polished Brass Cap -->
+    <radialGradient id="brassDome" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="25%" stop-color="#fae7aa" />
+      <stop offset="55%" stop-color="#c69a41" />
+      <stop offset="85%" stop-color="#735017" />
+      <stop offset="100%" stop-color="#3b2607" />
+    </radialGradient>
+
+    <radialGradient id="brassStep" cx="50%" cy="50%" r="50%">
+      <stop offset="70%" stop-color="#9d7629" />
+      <stop offset="85%" stop-color="#edd596" />
+      <stop offset="100%" stop-color="#553a0f" />
+    </radialGradient>
+
+    <filter id="capShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="2" dy="5" stdDeviation="5" flood-color="#000" flood-opacity="0.75" />
+    </filter>
+  </defs>
+
+  <g id="center-pinion-cap" filter="url(#capShadow)">
+    <!-- Base Beveled Flange -->
+    <circle cx="25" cy="25" r="23" fill="url(#brassStep)" stroke="#2d1c05" stroke-width="1.2" />
+    <!-- Raised Dome -->
+    <circle cx="25" cy="25" r="18" fill="url(#brassDome)" stroke="#4a330b" stroke-width="1" />
+    <circle cx="25" cy="25" r="12" stroke="rgba(255,255,255,0.45)" stroke-width="0.8" fill="none" />
+
+    <!-- Center Screwed Pin -->
+    <circle cx="25" cy="25" r="6" fill="#241706" />
+    <line x1="21" y1="25" x2="29" y2="25" stroke="#eccb85" stroke-width="1.5" stroke-linecap="round" />
+  </g>
+</svg>
+

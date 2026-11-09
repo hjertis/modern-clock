@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 520" width="16" height="520">
+  <defs>
+    <!-- Red Needle Gradient -->
+    <linearGradient id="redNeedle" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#8a0c0c" />
+      <stop offset="35%" stop-color="#dd2424" />
+      <stop offset="55%" stop-color="#ff5252" />
+      <stop offset="80%" stop-color="#dd2424" />
+      <stop offset="100%" stop-color="#730a0a" />
+    </linearGradient>
+
+    <!-- Brass Counterbalance -->
+    <radialGradient id="brassCounterweight" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#fff5cc" />
+      <stop offset="45%" stop-color="#d8ab55" />
+      <stop offset="85%" stop-color="#835c1f" />
+      <stop offset="100%" stop-color="#402a0a" />
+    </radialGradient>
+
+    <filter id="secondDrop" x="-60%" y="-10%" width="220%" height="120%">
+      <feDropShadow dx="2" dy="5" stdDeviation="4" flood-color="#000" flood-opacity="0.6" />
+    </filter>
+  </defs>
+
+  <g id="second-hand-art" filter="url(#secondDrop)">
+    <!-- Counterbalance Tail: y=420 down to y=510 -->
+    <rect x="7" y="420" width="2" height="40" fill="url(#redNeedle)" />
+    <!-- Round Brass Counterbalance Disc -->
+    <circle cx="8" cy="475" r="7" fill="url(#brassCounterweight)" stroke="#3a2507" stroke-width="1.2" />
+    <circle cx="8" cy="475" r="3" fill="#1f1404" />
+    <!-- Tail Pointer at end -->
+    <polygon points="7,482 9,482 8,510" fill="url(#redNeedle)" />
+
+    <!-- Main Needle Shaft from pivot (420) to tip (10) -->
+    <!-- Taper from 3.2px width at pivot to 1.2px at tip -->
+    <polygon points="6.6,420 7.4,10 8.6,10 9.4,420" fill="url(#redNeedle)" />
+
+    <!-- Center Pivot Collar at (8, 420) -->
+    <circle cx="8" cy="420" r="6" fill="url(#brassCounterweight)" stroke="#362306" stroke-width="1" />
+    <circle cx="8" cy="420" r="2.5" fill="#150e04" />
+  </g>
+</svg>

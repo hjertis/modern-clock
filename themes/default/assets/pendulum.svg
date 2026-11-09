@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 800" width="100" height="800">
+  <defs>
+    <!-- Brass Bob Gradient -->
+    <radialGradient id="brassBob" cx="38%" cy="32%" r="68%">
+      <stop offset="0%" stop-color="#fff8d6" />
+      <stop offset="25%" stop-color="#ebd085" />
+      <stop offset="55%" stop-color="#be9337" />
+      <stop offset="85%" stop-color="#79561a" />
+      <stop offset="100%" stop-color="#3d2706" />
+    </radialGradient>
+
+    <!-- Brass Rod Gradients -->
+    <linearGradient id="brassRod" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#553d12" />
+      <stop offset="35%" stop-color="#e9c878" />
+      <stop offset="60%" stop-color="#fff3ca" />
+      <stop offset="85%" stop-color="#b68c34" />
+      <stop offset="100%" stop-color="#4e350b" />
+    </linearGradient>
+
+    <!-- Steel Rod Gradient -->
+    <linearGradient id="steelRod" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3a4149" />
+      <stop offset="40%" stop-color="#99a3ad" />
+      <stop offset="65%" stop-color="#e6ebf0" />
+      <stop offset="90%" stop-color="#737c86" />
+      <stop offset="100%" stop-color="#2a3036" />
+    </linearGradient>
+
+    <!-- Drop Shadow for 3D depth in trunk chamber -->
+    <filter id="pendulumShadow" x="-50%" y="-5%" width="200%" height="110%">
+      <feDropShadow dx="8" dy="16" stdDeviation="10" flood-color="#000" flood-opacity="0.8" />
+    </filter>
+  </defs>
+
+  <g id="pendulum-assembly" filter="url(#pendulumShadow)">
+    <!-- 1. Suspension Spring and Top Block (Anchor at x=50, y=20) -->
+    <!-- Suspension Top Anchor Pin / Hole -->
+    <rect x="38" y="4" width="24" height="12" rx="2" fill="url(#brassRod)" stroke="#2b1a05" stroke-width="1.2" />
+    <!-- Spring Blade -->
+    <rect x="47" y="16" width="6" height="18" fill="#1e242c" />
+    <circle cx="50" cy="20" r="2.5" fill="#eef2f7" />
+
+    <!-- 2. Gridiron Suspension Rods (y=34 to y=620) -->
+    <!-- Top Crossbar Frame -->
+    <rect x="32" y="34" width="36" height="8" rx="2" fill="url(#brassRod)" stroke="#2b1a05" stroke-width="1" />
+
+    <!-- Mid Crossbars -->
+    <rect x="34" y="210" width="32" height="7" rx="1.5" fill="url(#brassRod)" stroke="#2b1a05" stroke-width="0.8" />
+    <rect x="34" y="410" width="32" height="7" rx="1.5" fill="url(#brassRod)" stroke="#2b1a05" stroke-width="0.8" />
+    <!-- Bottom Crossbar Frame -->
+    <rect x="32" y="590" width="36" height="9" rx="2" fill="url(#brassRod)" stroke="#2b1a05" stroke-width="1" />
+
+    <!-- Gridiron 5-Rod Assembly -->
+    <!-- Outer Rods (Brass) -->
+    <rect x="36" y="42" width="4" height="550" fill="url(#brassRod)" />
+    <rect x="60" y="42" width="4" height="550" fill="url(#brassRod)" />
+    <!-- Intermediate Rods (Steel) -->
+    <rect x="42" y="42" width="3.5" height="550" fill="url(#steelRod)" />
+    <rect x="54" y="42" width="3.5" height="550" fill="url(#steelRod)" />
+    <!-- Center Rod (Polished Steel) -->
+    <rect x="48" y="42" width="4" height="660" fill="url(#steelRod)" />
+
+    <!-- 3. Heavy Polished Brass Bob (centered at x=50, y=670, r=46) -->
+    <g id="pendulum-bob" transform="translate(50, 670)">
+      <!-- Outer Brass Disc -->
+      <circle cx="0" cy="0" r="46" fill="url(#brassBob)" stroke="#2d1c05" stroke-width="2.5" />
+      <!-- Concentric Lathe-Turned Decorative Rings -->
+      <circle cx="0" cy="0" r="41" stroke="#5d4111" stroke-width="1.2" fill="none" />
+      <circle cx="0" cy="0" r="38" stroke="rgba(255,255,255,0.45)" stroke-width="1" fill="none" />
+      <circle cx="0" cy="0" r="28" stroke="#684b17" stroke-width="1.8" fill="none" />
+      <circle cx="0" cy="0" r="18" stroke="rgba(255,255,255,0.35)" stroke-width="1" fill="none" />
+
+      <!-- Center Rosette / Regulator Medallion -->
+      <circle cx="0" cy="0" r="12" fill="url(#brassRod)" stroke="#2f1d05" stroke-width="1.5" />
+      <!-- Star Rosette facets -->
+      <polygon points="0,-10 3,-3 10,0 3,3 0,10 -3,3 -10,0 -3,-3" fill="#ffffff" opacity="0.4" />
+      <circle cx="0" cy="0" r="3" fill="#1c1103" />
+    </g>
+
+    <!-- 4. Rating Nut & Index Pointer (y=716 to y=780) -->
+    <!-- Threaded shaft extension -->
+    <rect x="48.5" y="716" width="3" height="32" fill="url(#steelRod)" />
+    <!-- Knurled Brass Rating Adjustment Nut -->
+    <rect x="40" y="728" width="20" height="12" rx="2" fill="url(#brassRod)" stroke="#321f06" stroke-width="1.2" />
+    <!-- Knurling notches on nut -->
+    <line x1="44" y1="729" x2="44" y2="739" stroke="#362207" stroke-width="1" />
+    <line x1="47" y1="729" x2="47" y2="739" stroke="#362207" stroke-width="1" />
+    <line x1="50" y1="729" x2="50" y2="739" stroke="#362207" stroke-width="1" />
+    <line x1="53" y1="729" x2="53" y2="739" stroke="#362207" stroke-width="1" />
+    <line x1="56" y1="729" x2="56" y2="739" stroke="#362207" stroke-width="1" />
+
+    <!-- Sharp Index Pointer extending down to beat scale -->
+    <polygon points="48,748 52,748 50,776" fill="url(#brassRod)" stroke="#301e06" stroke-width="0.8" />
+    <circle cx="50" cy="776" r="1" fill="#fff" />
+  </g>
+</svg>

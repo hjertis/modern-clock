@@ -1,0 +1,102 @@
+/* Clock Layer Composition & GPU Acceleration */
+
+#clock-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #090a0d;
+}
+
+#clock-stage {
+  position: relative;
+  width: 1080px;
+  height: 1920px;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: #0d0805;
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.95), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+  transform-origin: center center;
+  user-select: none;
+}
+
+/* Layered DOM Hierarchy */
+.clock-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+/* Layer 1: Background (#clock-bg) */
+#clock-bg {
+  z-index: 10;
+  width: 1080px;
+  height: 1920px;
+}
+
+/* Layer 2: Pendulum (#clock-pendulum) */
+#clock-pendulum {
+  z-index: 20;
+  will-change: transform, opacity, filter;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1), filter 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Dimmed state when dynamic notification chamber is active */
+#clock-pendulum.dimmed {
+  opacity: 0.18;
+  filter: blur(4px) brightness(0.5);
+}
+
+/* Layer 3: Notification Chamber (#notification-zone) */
+#notification-zone {
+  z-index: 30;
+  pointer-events: auto;
+}
+
+/* Layer 4: Dial Face (#clock-dial) */
+#clock-dial {
+  z-index: 40;
+  pointer-events: none;
+}
+
+/* Layer 5: Hands */
+.clock-hand {
+  z-index: 50;
+  will-change: transform;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+#hand-hour {
+  z-index: 51;
+}
+
+#hand-minute {
+  z-index: 52;
+}
+
+#hand-second {
+  z-index: 53;
+}
+
+/* Layer 6: Pinion / Center Cap (#hand-cap) */
+#hand-cap {
+  z-index: 60;
+  pointer-events: none;
+}
+
+/* Layer 7: Debug Overlay (#debug-crosshairs) */
+#debug-crosshairs {
+  z-index: 70;
+  width: 1080px;
+  height: 1920px;
+  pointer-events: none;
+}
+

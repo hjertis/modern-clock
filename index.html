@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Digital Grandfather Clock</title>
+    <link rel="icon" type="image/svg+xml" href="/themes/default/assets/cap.svg" />
+  </head>
+  <body>
+    <!-- Optional Floating HUD Pill -->
+    <button id="hud-toggle-pill" title="Toggle Developer HUD (or press H)">
+      <span>⚙️ Calibration HUD (H)</span>
+    </button>
+
+    <!-- Master Viewport Container with Containment Scaling -->
+    <div id="clock-container">
+      <div id="clock-stage">
+        <!-- Layer 1: Background Case -->
+        <img id="clock-bg" class="clock-layer" alt="Clock Case Background" draggable="false" />
+
+        <!-- Layer 2: Pendulum Assembly -->
+        <img id="clock-pendulum" class="clock-layer" alt="Clock Pendulum" draggable="false" />
+
+        <!-- Layer 3: Dynamic Notification / Glance Chamber -->
+        <div id="notification-zone" class="clock-layer"></div>
+
+        <!-- Layer 4: Dial Face -->
+        <img id="clock-dial" class="clock-layer" alt="Clock Dial Face" draggable="false" />
+
+        <!-- Layer 5: Clock Hands -->
+        <img id="hand-hour" class="clock-layer clock-hand" alt="Hour Hand" draggable="false" />
+        <img id="hand-minute" class="clock-layer clock-hand" alt="Minute Hand" draggable="false" />
+        <img id="hand-second" class="clock-layer clock-hand" alt="Second Hand" draggable="false" />
+
+        <!-- Layer 6: Center Pinion Cap -->
+        <img id="hand-cap" class="clock-layer" alt="Center Pinion Cap" draggable="false" />
+
+        <!-- Layer 7: Debug Calibration Crosshairs -->
+        <div id="debug-crosshairs" class="clock-layer"></div>
+      </div>
+    </div>
+
+    <!-- Application Entry Point -->
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+

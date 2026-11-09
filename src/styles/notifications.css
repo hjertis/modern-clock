@@ -1,0 +1,178 @@
+/* Notification Chamber / Glance Chamber Styling */
+
+#notification-zone {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 16px;
+  box-sizing: border-box;
+  padding: 16px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#notification-zone > * {
+  pointer-events: auto;
+}
+
+/* Notification Card Component */
+.notification-card {
+  position: relative;
+  width: 100%;
+  background: rgba(18, 14, 11, 0.88);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1.5px solid rgba(220, 180, 110, 0.35);
+  border-radius: 16px;
+  padding: 24px 28px;
+  box-sizing: border-box;
+  color: #f7eedb;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 20px rgba(212, 170, 85, 0.15);
+  transform: translateY(40px) scale(0.95);
+  opacity: 0;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.4s ease,
+              border-color 0.3s ease;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.notification-card.visible {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.notification-card.exiting {
+  transform: translateY(-20px) scale(0.92);
+  opacity: 0;
+  transition: transform 0.4s cubic-bezier(0.7, 0, 0.84, 0), opacity 0.35s ease;
+}
+
+/* Category Specific Color Accents */
+.notification-card.doorbell {
+  border-color: rgba(255, 170, 50, 0.6);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(255, 170, 50, 0.25);
+}
+
+.notification-card.alert {
+  border-color: rgba(255, 69, 58, 0.6);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(255, 69, 58, 0.25);
+}
+
+.notification-card.calendar {
+  border-color: rgba(10, 132, 255, 0.6);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(10, 132, 255, 0.25);
+}
+
+/* Header */
+.notification-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.notification-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.notification-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(212, 170, 85, 0.18);
+  color: #ffd875;
+}
+
+.doorbell .notification-icon {
+  background: rgba(255, 170, 50, 0.2);
+  color: #ffaa32;
+}
+
+.alert .notification-icon {
+  background: rgba(255, 69, 58, 0.2);
+  color: #ff6961;
+}
+
+.calendar .notification-icon {
+  background: rgba(10, 132, 255, 0.2);
+  color: #5ac8fa;
+}
+
+.notification-title {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #fffaf0;
+}
+
+.notification-time {
+  font-family: -apple-system, BlinkMacSystemFont, monospace;
+  font-size: 17px;
+  color: rgba(240, 225, 200, 0.6);
+}
+
+/* Body */
+.notification-body {
+  margin: 0;
+}
+
+.notification-message {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 20px;
+  line-height: 1.45;
+  color: rgba(245, 235, 220, 0.9);
+}
+
+/* Close Button */
+.notification-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+
+.notification-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+/* Progress bar for auto-timeout */
+.notification-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #d4aa55, #fcedb3);
+  width: 100%;
+  transform-origin: left;
+  animation: progressDrain linear forwards;
+}
+
+@keyframes progressDrain {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+

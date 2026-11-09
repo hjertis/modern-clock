@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 500" width="32" height="500">
+  <defs>
+    <linearGradient id="bluedSteelMinute" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#080e18" />
+      <stop offset="30%" stop-color="#182e4e" />
+      <stop offset="50%" stop-color="#4672aa" />
+      <stop offset="70%" stop-color="#182e4e" />
+      <stop offset="100%" stop-color="#070c14" />
+    </linearGradient>
+
+    <radialGradient id="brassCollarMin" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#fff6cc" />
+      <stop offset="45%" stop-color="#d9af54" />
+      <stop offset="85%" stop-color="#7d581a" />
+      <stop offset="100%" stop-color="#3d2707" />
+    </radialGradient>
+
+    <filter id="minuteDrop" x="-35%" y="-10%" width="170%" height="120%">
+      <feDropShadow dx="3" dy="6" stdDeviation="5" flood-color="#000" flood-opacity="0.65" />
+    </filter>
+  </defs>
+
+  <g id="minute-hand-art" filter="url(#minuteDrop)">
+    <!-- Counterbalance Tail (420 to 490) -->
+    <path d="
+      M 16,420
+      L 13,440
+      C 10,460 9,475 12,485
+      C 14,492 18,492 20,485
+      C 23,475 22,460 19,440
+      Z
+    " fill="url(#bluedSteelMinute)" />
+
+    <!-- Main Blade from pivot (420) to tip (15) -->
+    <!-- Lower Shaft: 420 down to 260 -->
+    <path d="
+      M 13,420
+      L 13,260
+      C 11,250 5,230 5,200
+      C 5,170 11,150 14,130
+      L 15.2,15
+      L 16.8,15
+      L 18,130
+      C 21,150 27,170 27,200
+      C 27,230 21,250 19,260
+      L 19,420
+      Z
+    " fill="url(#bluedSteelMinute)" />
+
+    <!-- Ornate Lozenge Piercing at 150..250 -->
+    <path d="
+      M 16,145
+      C 13,170 9,185 9,200
+      C 9,215 13,230 16,245
+      C 19,230 23,215 23,200
+      C 23,185 19,170 16,145
+      Z
+    " fill="#000000" opacity="0.38" />
+
+    <!-- Inner diamond cut line -->
+    <line x1="16" y1="160" x2="16" y2="235" stroke="#4672aa" stroke-width="1.6" />
+
+    <!-- Center Rib Highlight along shaft -->
+    <line x1="16" y1="260" x2="16" y2="415" stroke="#4672aa" stroke-width="1.6" opacity="0.85" />
+    <line x1="16" y1="20" x2="16" y2="140" stroke="#4672aa" stroke-width="1.2" opacity="0.85" />
+
+    <!-- Pivot Boss / Collar (x=16, y=420) -->
+    <circle cx="16" cy="420" r="12" fill="url(#bluedSteelMinute)" />
+    <circle cx="16" cy="420" r="8" fill="url(#brassCollarMin)" />
+    <circle cx="16" cy="420" r="3.5" fill="#0c121b" />
+  </g>
+</svg>
+
