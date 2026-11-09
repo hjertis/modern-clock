@@ -4,7 +4,7 @@ Here is the revised, hardened list of deliverables ready for implementation:
 
 ---
 
-## 1. 🌉 Ingestion Bridge (WebSocket + REST)
+## 1. 🌉 Backend daemon: WebSocket + REST ingestion bridge
 
 Local lightweight daemon (Express / Fastify / Node) running alongside Vite.
 
