@@ -1,0 +1,23 @@
+[package]
+name = "grandfather-clock-backend"
+version = "0.1.0"
+edition = "2021"
+authors = ["Digital Grandfather Clock Team"]
+description = "Local ingestion pipeline, MQTT bridge, and WebSocket broadcaster daemon for Digital Grandfather Clock"
+
+[dependencies]
+axum = { version = "0.7", features = ["ws"] }
+tokio = { version = "1", features = ["full"] }
+tower = { version = "0.4", features = ["util"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rumqttc = "0.24"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1.10", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+http-body-util = "0.1"

@@ -136,3 +136,6 @@ dist
 .pnp.*
 
 # my list
+target/
+**/target/
+**/*.rs.bk

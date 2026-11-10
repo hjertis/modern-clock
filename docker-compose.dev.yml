@@ -1,0 +1,40 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: grandfather-clock-backend-dev
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - RUST_LOG=grandfather_clock_backend=debug,tower_http=info
+      - PORT=8080
+      - MQTT_BROKER_HOST=mosquitto:1883
+      - MQTT_CLIENT_ID=clock_backend_daemon
+    volumes:
+      - ./backend:/app
+      - backend_target:/app/target
+      - cargo_registry:/usr/local/cargo/registry
+      - cargo_git:/usr/local/cargo/git
+    command: cargo-watch -x run
+    depends_on:
+      mosquitto:
+        condition: service_started
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: grandfather-clock-mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    command: mosquitto -c /mosquitto-no-auth.conf
+
+volumes:
+  backend_target:
+    name: grandfather_clock_backend_target
+  cargo_registry:
+    name: grandfather_clock_cargo_registry
+  cargo_git:
+    name: grandfather_clock_cargo_git
+

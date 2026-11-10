@@ -167,3 +167,28 @@ npm run preview
 ```
 Output is bundled cleanly into `dist/`.
 
+---
+
+## ⚡ Backend Ingestion Daemon (Rust + Axum + MQTT)
+
+The backend ingestion daemon connects local MQTT sensors/Home Assistant and external HTTP webhooks directly to the portrait frontend over WebSockets.
+
+### Start with Hot-Reload Docker Setup
+```bash
+docker compose -f docker-compose.dev.yml up
+```
+
+### Test Alert Delivery via cURL
+```bash
+curl -X POST http://localhost:8080/api/notify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Front Door",
+    "message": "Package delivered",
+    "priority": "normal",
+    "durationMs": 8000
+  }'
+```
+See [`backend/README.md`](file:///c:/mhj/git/modern-clock/backend/README.md) for full endpoint specifications, MQTT topics, and WebSocket schemas.
+
+
