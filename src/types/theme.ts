@@ -59,7 +59,17 @@ export interface NotificationPayload {
   title: string;
   message: string;
   timeoutMs?: number;
+  priority?: 'normal' | 'urgent';
   category?: 'alert' | 'info' | 'doorbell' | 'calendar' | 'weather';
   timestamp?: Date;
 }
 
+export type {
+  Theme,
+  ThemeId,
+  ThemeConfig,
+  TimeData,
+  PhysicsData,
+  TelemetryData,
+  ThemeEvent
+} from '../themes/types';

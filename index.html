@@ -7,35 +7,37 @@
     <link rel="icon" type="image/svg+xml" href="/themes/default/assets/cap.svg" />
   </head>
   <body>
-    <!-- Optional Floating HUD Pill -->
-    <button id="hud-toggle-pill" title="Toggle Developer HUD (or press H)">
-      <span>⚙️ Calibration HUD (H)</span>
-    </button>
+    <!-- Floating Top-Left Control Pills -->
+    <div id="top-control-pills">
+      <button id="hud-toggle-pill" title="Toggle Developer HUD (or press H)">
+        <span>⚙️ Calibration HUD (H)</span>
+      </button>
+      <button id="theme-toggle-pill" title="Switch Theme Architecture (or press T)">
+        <span id="theme-pill-label">⚡ PCB-2049 / Silicon (T)</span>
+      </button>
+    </div>
 
     <!-- Master Viewport Container with Containment Scaling -->
     <div id="clock-container">
-      <div id="clock-stage">
-        <!-- Layer 1: Background Case -->
-        <img id="clock-bg" class="clock-layer" alt="Clock Case Background" draggable="false" />
+      <div id="clock-stage" data-theme="pcb_2049">
+        <!-- Primary Hardware-Accelerated Pluggable Theme Canvas -->
+        <canvas id="clock-canvas" class="clock-layer" width="1080" height="1920"></canvas>
 
-        <!-- Layer 2: Pendulum Assembly -->
-        <img id="clock-pendulum" class="clock-layer" alt="Clock Pendulum" draggable="false" />
+        <!-- Legacy DOM Layers (retained for ThemeLoader compatibility) -->
+        <img id="clock-bg" class="clock-layer legacy-dom-layer" alt="Clock Case Background" draggable="false" />
+        <img id="clock-pendulum" class="clock-layer legacy-dom-layer" alt="Clock Pendulum" draggable="false" />
 
-        <!-- Layer 3: Dynamic Notification / Glance Chamber -->
+        <!-- Dynamic Notification / Glance Chamber -->
         <div id="notification-zone" class="clock-layer"></div>
 
-        <!-- Layer 4: Dial Face -->
-        <img id="clock-dial" class="clock-layer" alt="Clock Dial Face" draggable="false" />
+        <!-- Legacy Dial & Hand DOM Layers -->
+        <img id="clock-dial" class="clock-layer legacy-dom-layer" alt="Clock Dial Face" draggable="false" />
+        <img id="hand-hour" class="clock-layer clock-hand legacy-dom-layer" alt="Hour Hand" draggable="false" />
+        <img id="hand-minute" class="clock-layer clock-hand legacy-dom-layer" alt="Minute Hand" draggable="false" />
+        <img id="hand-second" class="clock-layer clock-hand legacy-dom-layer" alt="Second Hand" draggable="false" />
+        <img id="hand-cap" class="clock-layer legacy-dom-layer" alt="Center Pinion Cap" draggable="false" />
 
-        <!-- Layer 5: Clock Hands -->
-        <img id="hand-hour" class="clock-layer clock-hand" alt="Hour Hand" draggable="false" />
-        <img id="hand-minute" class="clock-layer clock-hand" alt="Minute Hand" draggable="false" />
-        <img id="hand-second" class="clock-layer clock-hand" alt="Second Hand" draggable="false" />
-
-        <!-- Layer 6: Center Pinion Cap -->
-        <img id="hand-cap" class="clock-layer" alt="Center Pinion Cap" draggable="false" />
-
-        <!-- Layer 7: Debug Calibration Crosshairs -->
+        <!-- Debug Calibration Crosshairs -->
         <div id="debug-crosshairs" class="clock-layer"></div>
       </div>
     </div>
@@ -44,4 +46,3 @@
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
-

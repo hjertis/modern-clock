@@ -19,21 +19,29 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Floating discreet HUD toggle button on top-left */
-#hud-toggle-pill {
+/* Floating discreet HUD & Theme toggle buttons on top-left */
+#top-control-pills {
   position: fixed;
   top: 14px;
   left: 14px;
   z-index: 9998;
-  background: rgba(18, 21, 28, 0.7);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#hud-toggle-pill,
+#theme-toggle-pill {
+  background: rgba(14, 17, 23, 0.78);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #cbd5e1;
+  border: 1px solid rgba(244, 196, 98, 0.28);
+  color: #e2e8f0;
   padding: 6px 14px;
   border-radius: 20px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -42,10 +50,10 @@ html, body {
   user-select: none;
 }
 
-#hud-toggle-pill:hover {
-  background: rgba(30, 36, 48, 0.9);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.25);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+#hud-toggle-pill:hover,
+#theme-toggle-pill:hover {
+  background: rgba(24, 29, 38, 0.92);
+  color: #f4c462;
+  border-color: rgba(244, 196, 98, 0.65);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 12px rgba(244, 196, 98, 0.2);
 }
-

@@ -1,6 +1,7 @@
 import { ClockEngine } from './clockEngine';
 import { NotificationManager } from './notificationManager';
 import { ThemeLoader } from './themeLoader';
+import { ThemeManager } from '../themes/themeManager';
 import { HandMode, NotificationPayload } from '../types/theme';
 
 export type WSStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
@@ -9,7 +10,8 @@ export interface WSClientOptions {
   url?: string;
   clockEngine: ClockEngine;
   notificationManager: NotificationManager;
-  themeLoader: ThemeLoader;
+  themeManager?: ThemeManager;
+  themeLoader?: ThemeLoader;
   onStatusChange?: (status: WSStatus, url: string) => void;
 }
 
@@ -19,6 +21,7 @@ export interface BackendInitMessage {
   version: string;
   config: {
     theme?: string;
+    theme_id?: string;
     sleepOverride?: boolean;
     mode?: HandMode;
   };
@@ -39,12 +42,23 @@ export interface BackendNotifyMessage {
 export interface BackendConfigMessage {
   type: 'config';
   theme?: string;
+  theme_id?: string;
   sleepOverride?: boolean;
   mode?: HandMode;
   timestamp?: string;
 }
 
-export type BackendIncomingMessage = BackendInitMessage | BackendNotifyMessage | BackendConfigMessage;
+export interface SetThemeActionMessage {
+  action: 'set_theme';
+  theme_id: string;
+  theme?: string;
+}
+
+export type BackendIncomingMessage =
+  | BackendInitMessage
+  | BackendNotifyMessage
+  | BackendConfigMessage
+  | SetThemeActionMessage;
 
 export class ClockWebSocketClient {
   public static readonly DEFAULT_WS_URL = 'ws://192.168.0.69:8088/ws';
@@ -53,7 +67,8 @@ export class ClockWebSocketClient {
   private socket: WebSocket | null = null;
   private clockEngine: ClockEngine;
   private notificationManager: NotificationManager;
-  private themeLoader: ThemeLoader;
+  private themeManager?: ThemeManager;
+  private themeLoader?: ThemeLoader;
   private onStatusChangeCallback?: (status: WSStatus, url: string) => void;
 
   private status: WSStatus = 'disconnected';
@@ -65,13 +80,15 @@ export class ClockWebSocketClient {
   constructor(options: WSClientOptions) {
     this.clockEngine = options.clockEngine;
     this.notificationManager = options.notificationManager;
+    this.themeManager = options.themeManager;
     this.themeLoader = options.themeLoader;
     this.onStatusChangeCallback = options.onStatusChange;
 
     // Priority: Explicit option -> URL query param ?ws= -> Default
-    const queryWs = typeof window !== 'undefined'
-      ? new URLSearchParams(window.location.search).get('ws')
-      : null;
+    const queryWs =
+      typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('ws')
+        : null;
 
     this.url = options.url || queryWs || ClockWebSocketClient.DEFAULT_WS_URL;
   }
@@ -162,6 +179,85 @@ export class ClockWebSocketClient {
     }
   }
 
+  /**
+   * Processes an inbound JSON message (either from WebSocket or simulated test dispatch)
+   */
+  public processMessage(msg: BackendIncomingMessage | Record<string, unknown>): void {
+    console.log('[Clock WS] Received message:', msg);
+
+    // 1. Handle `{ "action": "set_theme", "theme_id": "pcb_2049" }`
+    if ('action' in msg && msg.action === 'set_theme') {
+      const targetTheme =
+        (typeof msg.theme_id === 'string' && msg.theme_id) ||
+        (typeof msg.theme === 'string' && msg.theme);
+      if (targetTheme) {
+        this.applyThemeIfChanged(targetTheme, true);
+      }
+      return;
+    }
+
+    const typedMsg = msg as BackendIncomingMessage;
+    if (!('type' in typedMsg)) return;
+
+    switch (typedMsg.type) {
+      case 'init': {
+        console.log(`[Clock WS] Server init response: v${typedMsg.version}`);
+        if (typedMsg.config) {
+          if (
+            typedMsg.config.mode &&
+            (typedMsg.config.mode === 'tick' || typedMsg.config.mode === 'sweep')
+          ) {
+            this.clockEngine.setSecondMode(typedMsg.config.mode);
+          }
+          const initTheme = typedMsg.config.theme_id || typedMsg.config.theme;
+          // Only override localStorage theme on init if backend was explicitly configured to a non-'default' theme
+          if (initTheme && initTheme !== 'default') {
+            this.applyThemeIfChanged(initTheme, false);
+          }
+        }
+        break;
+      }
+
+      case 'notify': {
+        const priority = typedMsg.priority || 'normal';
+        let category = typedMsg.category;
+        if (!category) {
+          category = priority === 'urgent' ? 'alert' : 'info';
+        }
+
+        const duration = typedMsg.durationMs || typedMsg.timeoutMs || 8000;
+        const payload: NotificationPayload = {
+          id: typedMsg.id,
+          title: typedMsg.title || (priority === 'urgent' ? 'Security Alert' : 'Notification'),
+          message: typedMsg.message || '',
+          priority,
+          category,
+          timeoutMs: duration,
+          timestamp: typedMsg.timestamp ? new Date(typedMsg.timestamp) : new Date()
+        };
+
+        this.notificationManager.notify(payload);
+        break;
+      }
+
+      case 'config': {
+        if (typedMsg.mode && (typedMsg.mode === 'tick' || typedMsg.mode === 'sweep')) {
+          this.clockEngine.setSecondMode(typedMsg.mode);
+        }
+        const cfgTheme = typedMsg.theme_id || typedMsg.theme;
+        if (cfgTheme) {
+          this.applyThemeIfChanged(cfgTheme, true);
+        }
+        break;
+      }
+
+      default:
+        if (this.themeManager) {
+          this.themeManager.handleInboundMessage(msg as Record<string, unknown>);
+        }
+    }
+  }
+
   private handleOpen(): void {
     this.reconnectAttempts = 0;
     this.setStatus('connected');
@@ -189,71 +285,32 @@ export class ClockWebSocketClient {
     }
   }
 
-  private processMessage(msg: BackendIncomingMessage): void {
-    console.log('[Clock WS] Received message:', msg);
-
-    switch (msg.type) {
-      case 'init': {
-        console.log(`[Clock WS] Server init response: v${msg.version}`);
-        if (msg.config) {
-          if (msg.config.mode && (msg.config.mode === 'tick' || msg.config.mode === 'sweep')) {
-            this.clockEngine.setSecondMode(msg.config.mode);
-          }
-          if (msg.config.theme) {
-            this.applyThemeIfChanged(msg.config.theme);
-          }
-        }
-        break;
+  private async applyThemeIfChanged(themeId: string, forceTransition = false): Promise<void> {
+    if (this.themeManager) {
+      const resolved = this.themeManager.resolveThemeId(themeId);
+      if (!forceTransition && this.themeManager.getActiveThemeId() === resolved) {
+        return;
       }
-
-      case 'notify': {
-        const priority = msg.priority || 'normal';
-        let category = msg.category;
-        if (!category) {
-          category = priority === 'urgent' ? 'alert' : 'info';
-        }
-
-        const duration = msg.durationMs || msg.timeoutMs || 8000;
-        const payload: NotificationPayload = {
-          id: msg.id,
-          title: msg.title || (priority === 'urgent' ? 'Security Alert' : 'Notification'),
-          message: msg.message || '',
-          category,
-          timeoutMs: duration,
-          timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date()
-        };
-
-        this.notificationManager.notify(payload);
-        break;
+      try {
+        console.log(`[Clock WS] Switching theme via ThemeManager to '${resolved}'...`);
+        await this.themeManager.setTheme(resolved);
+      } catch (err) {
+        console.error(`[Clock WS] Failed to switch theme to '${themeId}':`, err);
       }
-
-      case 'config': {
-        if (msg.mode && (msg.mode === 'tick' || msg.mode === 'sweep')) {
-          this.clockEngine.setSecondMode(msg.mode);
-        }
-        if (msg.theme) {
-          this.applyThemeIfChanged(msg.theme);
-        }
-        break;
-      }
-
-      default:
-        console.log('[Clock WS] Unknown message type:', msg);
-    }
-  }
-
-  private async applyThemeIfChanged(themeName: string): Promise<void> {
-    const current = this.themeLoader.getManifest();
-    if (current && current.name.toLowerCase() === themeName.toLowerCase()) {
       return;
     }
 
-    try {
-      console.log(`[Clock WS] Switching theme to '${themeName}'...`);
-      const manifest = await this.themeLoader.loadTheme(`/themes/${themeName}/theme.json`);
-      this.clockEngine.setManifest(manifest);
-    } catch (err) {
-      console.error(`[Clock WS] Failed to switch theme to '${themeName}':`, err);
+    if (this.themeLoader) {
+      const current = this.themeLoader.getManifest();
+      if (current && current.name.toLowerCase() === themeId.toLowerCase()) {
+        return;
+      }
+      try {
+        const manifest = await this.themeLoader.loadTheme(`/themes/${themeId}/theme.json`);
+        this.clockEngine.setManifest(manifest);
+      } catch (err) {
+        console.error(`[Clock WS] Failed to switch theme via ThemeLoader to '${themeId}':`, err);
+      }
     }
   }
 
@@ -275,11 +332,16 @@ export class ClockWebSocketClient {
     this.clearReconnectTimer();
 
     // Exponential backoff: 1s, 2s, 3s, 5s... max 10s + jitter
-    const delay = Math.min(10000, 1000 * Math.pow(1.5, this.reconnectAttempts)) + Math.random() * 500;
+    const delay =
+      Math.min(10000, 1000 * Math.pow(1.5, this.reconnectAttempts)) + Math.random() * 500;
     this.reconnectAttempts++;
 
     this.setStatus('reconnecting');
-    console.log(`[Clock WS] Scheduling reconnect in ${(delay / 1000).toFixed(1)}s (attempt ${this.reconnectAttempts})...`);
+    console.log(
+      `[Clock WS] Scheduling reconnect in ${(delay / 1000).toFixed(1)}s (attempt ${
+        this.reconnectAttempts
+      })...`
+    );
 
     this.reconnectTimer = window.setTimeout(() => {
       if (this.shouldReconnect) {
@@ -297,9 +359,9 @@ export class ClockWebSocketClient {
 
   private setStatus(status: WSStatus): void {
     this.status = status;
+    this.clockEngine.setWSStatus(status, this.url);
     if (this.onStatusChangeCallback) {
       this.onStatusChangeCallback(status, this.url);
     }
   }
 }
-

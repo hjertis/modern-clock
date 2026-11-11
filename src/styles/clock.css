@@ -8,7 +8,7 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: #090a0d;
+  background: #06070a;
 }
 
 #clock-stage {
@@ -17,10 +17,15 @@
   height: 1920px;
   flex-shrink: 0;
   overflow: hidden;
-  background: #0d0805;
-  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.95), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+  background: #0c0e12;
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.95), 0 0 1px 1px rgba(244, 196, 98, 0.12);
   transform-origin: center center;
   user-select: none;
+}
+
+#clock-stage[data-theme="vienna_classic"] {
+  background: #0d0805;
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.95), 0 0 1px 1px rgba(255, 255, 255, 0.05);
 }
 
 /* Layered DOM Hierarchy */
@@ -31,64 +36,23 @@
   pointer-events: none;
 }
 
-/* Layer 1: Background (#clock-bg) */
-#clock-bg {
-  z-index: 10;
+/* Primary Theme Canvas (#clock-canvas) */
+#clock-canvas {
+  z-index: 25;
   width: 1080px;
   height: 1920px;
+  pointer-events: none;
+  will-change: opacity;
 }
 
-/* Layer 2: Pendulum (#clock-pendulum) */
-#clock-pendulum {
-  z-index: 20;
-  will-change: transform, opacity, filter;
-  backface-visibility: hidden;
-  transform-style: preserve-3d;
-  transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1), filter 0.65s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-/* Dimmed state when dynamic notification chamber is active */
-#clock-pendulum.dimmed {
-  opacity: 0.18;
-  filter: blur(4px) brightness(0.5);
+/* Hide legacy static img layers when pluggable canvas theme is active */
+.legacy-dom-layer {
+  display: none;
 }
 
 /* Layer 3: Notification Chamber (#notification-zone) */
 #notification-zone {
-  z-index: 30;
-  pointer-events: auto;
-}
-
-/* Layer 4: Dial Face (#clock-dial) */
-#clock-dial {
-  z-index: 40;
-  pointer-events: none;
-}
-
-/* Layer 5: Hands */
-.clock-hand {
-  z-index: 50;
-  will-change: transform;
-  backface-visibility: hidden;
-  transform-style: preserve-3d;
-  pointer-events: none;
-}
-
-#hand-hour {
-  z-index: 51;
-}
-
-#hand-minute {
-  z-index: 52;
-}
-
-#hand-second {
-  z-index: 53;
-}
-
-/* Layer 6: Pinion / Center Cap (#hand-cap) */
-#hand-cap {
-  z-index: 60;
+  z-index: 35;
   pointer-events: none;
 }
 
@@ -99,4 +63,3 @@
   height: 1920px;
   pointer-events: none;
 }
-

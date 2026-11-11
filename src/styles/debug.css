@@ -112,7 +112,7 @@
 /* Status Bar */
 .debug-status-row {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr;
+  grid-template-columns: 1.3fr 0.9fr 0.9fr;
   gap: 8px;
   background: rgba(0, 0, 0, 0.35);
   padding: 10px 12px;
@@ -197,6 +197,16 @@
 
 .debug-btn-accent:hover {
   background: rgba(212, 170, 85, 0.35);
+}
+
+.debug-btn-danger {
+  background: rgba(255, 59, 48, 0.2);
+  border-color: rgba(255, 59, 48, 0.5);
+  color: #ff6961;
+}
+
+.debug-btn-danger:hover {
+  background: rgba(255, 59, 48, 0.35);
 }
 
 /* Form Controls */

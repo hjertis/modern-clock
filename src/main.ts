@@ -4,7 +4,8 @@ import { ClockEngine } from './core/clockEngine';
 import { NotificationManager } from './core/notificationManager';
 import { DebugOverlay } from './core/debugOverlay';
 import { ClockWebSocketClient } from './core/wsClient';
-import { NotificationPayload } from './types/theme';
+import { ThemeManager } from './themes/themeManager';
+import { NotificationPayload, Theme } from './types/theme';
 
 export interface ClockPublicAPI {
   notify: (payload: NotificationPayload) => string;
@@ -13,6 +14,8 @@ export interface ClockPublicAPI {
   setMode: (mode: 'tick' | 'sweep') => void;
   toggleMode: () => 'tick' | 'sweep';
   setTimeMultiplier: (multiplier: number) => void;
+  setTheme: (themeId: string) => Promise<Theme>;
+  themeManager: ThemeManager;
   engine: ClockEngine;
   loader: ThemeLoader;
   notifications: NotificationManager;
@@ -47,6 +50,7 @@ function initViewportScaling(stage: HTMLElement): void {
 
 async function bootstrap() {
   const stage = document.getElementById('clock-stage') as HTMLElement;
+  const canvas = document.getElementById('clock-canvas') as HTMLCanvasElement;
   const bg = document.getElementById('clock-bg') as HTMLImageElement;
   const pendulum = document.getElementById('clock-pendulum') as HTMLImageElement;
   const notificationZone = document.getElementById('notification-zone') as HTMLElement;
@@ -57,8 +61,10 @@ async function bootstrap() {
   const handCap = document.getElementById('hand-cap') as HTMLImageElement;
   const crosshairs = document.getElementById('debug-crosshairs') as HTMLElement;
   const hudTogglePill = document.getElementById('hud-toggle-pill') as HTMLButtonElement;
+  const themeTogglePill = document.getElementById('theme-toggle-pill') as HTMLButtonElement;
+  const themePillLabel = document.getElementById('theme-pill-label') as HTMLElement;
 
-  if (!stage || !bg || !pendulum || !notificationZone || !dial || !handHour || !handMinute || !handSecond || !handCap || !crosshairs) {
+  if (!stage || !canvas || !notificationZone || !crosshairs) {
     throw new Error('Missing required clock DOM elements');
   }
 
@@ -78,15 +84,45 @@ async function bootstrap() {
     handCap
   };
 
-  // 3. Initialize Core Managers
+  // 3. Initialize Core Managers & Modular Theme Architecture
   const themeLoader = new ThemeLoader(elements);
-  const clockEngine = new ClockEngine(elements);
+  const themeManager = new ThemeManager(canvas, stage, notificationZone);
+  const clockEngine = new ClockEngine(elements, { themeManager });
   const notificationManager = new NotificationManager(notificationZone, pendulum);
 
-  // 4. Load Default Theme Manifest
+  clockEngine.setActiveNotificationsProvider(() => notificationManager.getActiveCount());
+
+  // Forward notification events to active theme for reactive lateral bus pulses
+  notificationManager.addEventListener((event) => {
+    themeManager.dispatchEvent(event);
+  });
+
+  // Sync engine manifest & pill UI whenever active theme changes
+  const updateThemePillLabel = (themeId: string) => {
+    if (!themePillLabel) return;
+    if (themeId === 'pcb_2049') {
+      themePillLabel.textContent = '⚡ PCB-2049 / Silicon (T)';
+    } else {
+      themePillLabel.textContent = '🕰️ Vienna Classic (T)';
+    }
+  };
+
+  themeManager.onThemeChange((theme, manifest) => {
+    if (manifest) {
+      clockEngine.setManifest(manifest);
+    }
+    updateThemePillLabel(theme.id);
+  });
+
   try {
-    const manifest = await themeLoader.loadTheme('/themes/default/theme.json');
-    clockEngine.setManifest(manifest);
+    // 4. Mount Saved Theme from localStorage (or default 'pcb_2049')
+    const initialTheme = await themeManager.initDefaultOrSavedTheme('pcb_2049');
+    const initialManifest = themeManager.getActiveManifest();
+    if (initialManifest) {
+      clockEngine.setManifest(initialManifest);
+    }
+    updateThemePillLabel(initialTheme.id);
+
     clockEngine.start();
 
     // 5. Initialize WebSocket connection to backend daemon
@@ -94,6 +130,7 @@ async function bootstrap() {
     const wsClient = new ClockWebSocketClient({
       clockEngine,
       notificationManager,
+      themeManager,
       themeLoader,
       onStatusChange: (status, url) => {
         debugOverlay?.updateWSStatus(status, url);
@@ -107,13 +144,23 @@ async function bootstrap() {
       clockEngine,
       themeLoader,
       notificationManager,
-      wsClient
+      wsClient,
+      themeManager
     );
 
     // Pill button toggles HUD
     if (hudTogglePill) {
       hudTogglePill.addEventListener('click', () => {
         debugOverlay?.toggleHUD();
+      });
+    }
+
+    // Theme pill button toggles between PCB-2049 and Vienna Classic
+    if (themeTogglePill) {
+      themeTogglePill.addEventListener('click', () => {
+        const nextId =
+          themeManager.getActiveThemeId() === 'pcb_2049' ? 'vienna_classic' : 'pcb_2049';
+        themeManager.setTheme(nextId);
       });
     }
 
@@ -128,6 +175,8 @@ async function bootstrap() {
       setMode: (mode: 'tick' | 'sweep') => clockEngine.setSecondMode(mode),
       toggleMode: () => clockEngine.toggleSecondMode(),
       setTimeMultiplier: (multiplier: number) => clockEngine.setTimeMultiplier(multiplier),
+      setTheme: (themeId: string) => themeManager.setTheme(themeId),
+      themeManager,
       engine: clockEngine,
       loader: themeLoader,
       notifications: notificationManager,
@@ -135,20 +184,35 @@ async function bootstrap() {
     };
 
     window.clock = publicAPI;
-    console.log('[Digital Grandfather Clock] Initialized successfully. Public API accessible at window.clock');
+    console.log(
+      '[Digital Grandfather Clock] Initialized modular theme architecture. Public API accessible at window.clock'
+    );
 
-    // Optional subtle welcome glance
+    // Subtle welcome glance notification demonstrating reactive electron packets & circuit toast
     setTimeout(() => {
-      notificationManager.notify({
-        category: 'info',
-        title: 'Chamber Online',
-        message: 'Vienna Classic 1080×1920 engine synchronized to epoch time. Press H to toggle HUD.',
-        timeoutMs: 5000
-      });
-    }, 1200);
-
+      const activeId = themeManager.getActiveThemeId();
+      if (activeId === 'pcb_2049') {
+        notificationManager.notify({
+          category: 'info',
+          priority: 'normal',
+          title: 'SYS_BOOT // PCB-2049 ONLINE',
+          message:
+            'Monocrystalline silicon wafer locked to harmonic phase θ(t). Press T to switch theme or H for HUD.',
+          timeoutMs: 5200
+        });
+      } else {
+        notificationManager.notify({
+          category: 'info',
+          priority: 'normal',
+          title: 'Chamber Online',
+          message:
+            'Vienna Classic 1080×1920 engine synchronized to epoch time. Press T to switch theme or H for HUD.',
+          timeoutMs: 5000
+        });
+      }
+    }, 900);
   } catch (error) {
-    console.error('[Digital Grandfather Clock] Failed to load theme:', error);
+    console.error('[Digital Grandfather Clock] Failed to initialize theme architecture:', error);
   }
 }
 
@@ -158,4 +222,3 @@ if (document.readyState === 'loading') {
 } else {
   bootstrap();
 }
-

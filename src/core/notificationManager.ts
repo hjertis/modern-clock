@@ -1,14 +1,31 @@
 import { NotificationPayload } from '../types/theme';
+import { ThemeEvent } from '../themes/types';
 
 export class NotificationManager {
   private zoneElement: HTMLElement;
-  private pendulumElement: HTMLElement;
+  private pendulumElement: HTMLElement | null;
   private activeNotifications: Map<string, { element: HTMLElement; timerId: number | null }> = new Map();
   private notificationCounter = 0;
+  private onEventListeners: Array<(event: ThemeEvent) => void> = [];
 
-  constructor(zoneElement: HTMLElement, pendulumElement: HTMLElement) {
+  constructor(zoneElement: HTMLElement, pendulumElement?: HTMLElement | null) {
     this.zoneElement = zoneElement;
-    this.pendulumElement = pendulumElement;
+    this.pendulumElement = pendulumElement || null;
+  }
+
+  public addEventListener(listener: (event: ThemeEvent) => void): () => void {
+    this.onEventListeners.push(listener);
+    return () => {
+      this.onEventListeners = this.onEventListeners.filter((l) => l !== listener);
+    };
+  }
+
+  public getActiveCount(): number {
+    return this.activeNotifications.size;
+  }
+
+  public hasActiveNotifications(): boolean {
+    return this.activeNotifications.size > 0;
   }
 
   /**
@@ -17,20 +34,24 @@ export class NotificationManager {
   public notify(payload: NotificationPayload): string {
     const id = payload.id || `notif_${Date.now()}_${++this.notificationCounter}`;
     const timeoutMs = payload.timeoutMs !== undefined ? payload.timeoutMs : 6000;
+    const isUrgent = payload.priority === 'urgent' || payload.category === 'alert';
+    const category = payload.category || (isUrgent ? 'alert' : 'info');
 
     // Create card element
     const card = document.createElement('div');
-    card.className = `notification-card ${payload.category || 'info'}`;
+    card.className = `notification-card ${category} ${isUrgent ? 'priority-urgent' : 'priority-normal'}`;
     card.setAttribute('data-id', id);
 
     const timeStr = (payload.timestamp || new Date()).toLocaleTimeString([], {
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      second: '2-digit'
     });
 
-    const iconSvg = this.getCategoryIcon(payload.category);
+    const iconSvg = this.getCategoryIcon(category);
 
     card.innerHTML = `
+      <div class="notification-circuit-trace" aria-hidden="true"></div>
       <div class="notification-header">
         <div class="notification-title-wrap">
           <span class="notification-icon">${iconSvg}</span>
@@ -78,6 +99,18 @@ export class NotificationManager {
     this.activeNotifications.set(id, { element: card, timerId });
     this.updatePendulumState();
 
+    // Emit reactive theme event so active theme can pulse lateral trace buses
+    const themeEvent: ThemeEvent = {
+      type: isUrgent ? 'priority_alert' : 'notification',
+      priority: isUrgent ? 'urgent' : 'normal',
+      category,
+      payload,
+      timestamp: Date.now()
+    };
+    for (const listener of this.onEventListeners) {
+      listener(themeEvent);
+    }
+
     return id;
   }
 
@@ -119,10 +152,10 @@ export class NotificationManager {
   private updatePendulumState(): void {
     const hasActive = this.activeNotifications.size > 0;
     if (hasActive) {
-      this.pendulumElement.classList.add('dimmed');
+      this.pendulumElement?.classList.add('dimmed');
       this.zoneElement.classList.add('active');
     } else {
-      this.pendulumElement.classList.remove('dimmed');
+      this.pendulumElement?.classList.remove('dimmed');
       this.zoneElement.classList.remove('active');
     }
   }
@@ -148,4 +181,3 @@ export class NotificationManager {
     }
   }
 }
-

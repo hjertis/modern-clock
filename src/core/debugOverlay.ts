@@ -1,6 +1,7 @@
 import { ThemeManifest } from '../types/theme';
 import { ClockEngine } from './clockEngine';
 import { ThemeLoader } from './themeLoader';
+import { ThemeManager } from '../themes/themeManager';
 import { NotificationManager } from './notificationManager';
 import { ClockWebSocketClient, WSStatus } from './wsClient';
 
@@ -10,10 +11,11 @@ export class DebugOverlay {
   private panelElement!: HTMLElement;
   private clockEngine: ClockEngine;
   private themeLoader: ThemeLoader;
+  private themeManager?: ThemeManager;
   private notificationManager: NotificationManager;
   private wsClient?: ClockWebSocketClient;
-  private isVisible = true;
-  private showCrosshairs = true;
+  private isVisible = false;
+  private showCrosshairs = false;
 
   constructor(
     container: HTMLElement,
@@ -21,7 +23,8 @@ export class DebugOverlay {
     clockEngine: ClockEngine,
     themeLoader: ThemeLoader,
     notificationManager: NotificationManager,
-    wsClient?: ClockWebSocketClient
+    wsClient?: ClockWebSocketClient,
+    themeManager?: ThemeManager
   ) {
     this.container = container;
     this.crosshairsLayer = crosshairsLayer;
@@ -29,45 +32,83 @@ export class DebugOverlay {
     this.themeLoader = themeLoader;
     this.notificationManager = notificationManager;
     this.wsClient = wsClient;
+    this.themeManager = themeManager;
 
     this.initPanel();
     this.setupKeyboardShortcuts();
     this.updateCrosshairs();
+
+    if (this.themeManager) {
+      this.themeManager.onThemeChange((_theme, manifest) => {
+        if (manifest) {
+          this.renderPanelContent(manifest);
+          this.updateCrosshairs();
+        }
+      });
+    }
+  }
+
+  private getActiveManifest(): ThemeManifest | null {
+    return this.themeManager?.getActiveManifest() || this.themeLoader.getManifest();
   }
 
   private initPanel(): void {
     const panel = document.createElement('div');
     panel.id = 'debug-hud-panel';
-    panel.className = 'debug-panel';
+    panel.className = `debug-panel ${this.isVisible ? '' : 'hidden'}`.trim();
     this.panelElement = panel;
 
-    const manifest = this.themeLoader.getManifest();
-    if (!manifest) return;
-
-    this.renderPanelContent(manifest);
+    const manifest = this.getActiveManifest();
+    if (manifest) {
+      this.renderPanelContent(manifest);
+    }
     this.container.appendChild(panel);
 
-    // Subscribe to clock tick for live clock readout
-    const timeDisplay = panel.querySelector('#debug-time-readout');
-    const pendulumDisplay = panel.querySelector('#debug-pendulum-readout');
-
-    this.clockEngine.addOnTickListener((currentDate, pendulumAngle) => {
+    this.clockEngine.addOnTickListener((currentDate, pendulumAngle, fps) => {
       if (!this.isVisible) return;
+      const timeDisplay = this.panelElement.querySelector('#debug-time-readout');
+      const pendulumDisplay = this.panelElement.querySelector('#debug-pendulum-readout');
+      const fpsDisplay = this.panelElement.querySelector('#debug-fps-readout');
+
       if (timeDisplay) {
-        timeDisplay.textContent = currentDate.toLocaleTimeString() + '.' + String(currentDate.getMilliseconds()).padStart(3, '0');
+        timeDisplay.textContent =
+          currentDate.toLocaleTimeString() +
+          '.' +
+          String(currentDate.getMilliseconds()).padStart(3, '0');
       }
       if (pendulumDisplay) {
         pendulumDisplay.textContent = `${pendulumAngle > 0 ? '+' : ''}${pendulumAngle.toFixed(2)}°`;
+      }
+      if (fpsDisplay) {
+        fpsDisplay.textContent = `${fps.toFixed(1)} FPS`;
       }
     });
   }
 
   private renderPanelContent(manifest: ThemeManifest): void {
+    const activeThemeId = this.themeManager?.getActiveThemeId() || 'pcb_2049';
+    const availableThemes = this.themeManager?.getAvailableThemes() || [
+      { id: 'pcb_2049', name: 'PCB-2049 / Industrial Silicon' },
+      { id: 'vienna_classic', name: 'Vienna Classic' }
+    ];
+
+    const themeButtonsHtml = availableThemes
+      .map(
+        (t) => `
+        <button data-theme-id="${t.id}" class="debug-btn theme-select-btn ${
+          t.id === activeThemeId ? 'active' : ''
+        }">
+          ${t.id === 'pcb_2049' ? '⚡ ' : '🕰️ '}${t.name}
+        </button>
+      `
+      )
+      .join('');
+
     this.panelElement.innerHTML = `
       <div class="debug-header">
         <div class="debug-title">
           <span class="debug-badge">DEV HUD</span>
-          <h3>Grandfather Clock Calibration</h3>
+          <h3>Clock Architecture & Calibration</h3>
         </div>
         <div class="debug-actions-top">
           <button id="btn-toggle-crosshairs" class="debug-btn-sm ${this.showCrosshairs ? 'active' : ''}">
@@ -89,6 +130,10 @@ export class DebugOverlay {
             <span id="debug-pendulum-readout" class="stat-value font-mono">0.00°</span>
           </div>
           <div class="debug-stat">
+            <span class="stat-label">Frame Rate</span>
+            <span id="debug-fps-readout" class="stat-value font-mono">60.0 FPS</span>
+          </div>
+          <div class="debug-stat">
             <span class="stat-label">Mode</span>
             <span id="debug-mode-readout" class="stat-value font-mono">${this.clockEngine.getSecondMode().toUpperCase()}</span>
           </div>
@@ -98,21 +143,29 @@ export class DebugOverlay {
           </div>
         </div>
 
+        <!-- Theme Selector -->
+        <div class="debug-section">
+          <div class="section-title">Active Theme Engine</div>
+          <div class="debug-button-grid">
+            ${themeButtonsHtml}
+          </div>
+        </div>
+
         <!-- Quick Action Buttons -->
         <div class="debug-section">
-          <div class="section-title">Quick Actions</div>
+          <div class="section-title">Reactive Telemetry & Actions</div>
           <div class="debug-button-grid">
             <button id="btn-doorbell" class="debug-btn debug-btn-accent">
-              🔔 Simulate Doorbell
+              🔔 Doorbell + Electron Pulse
+            </button>
+            <button id="btn-urgent-alert" class="debug-btn debug-btn-danger">
+              🚨 Priority Security Alert
             </button>
             <button id="btn-toggle-mode" class="debug-btn">
               ⏱ Toggle Tick / Sweep
             </button>
             <button id="btn-fast-forward" class="debug-btn">
               ⏩ 10x Fast-Forward
-            </button>
-            <button id="btn-copy-manifest" class="debug-btn">
-              📋 Copy theme.json
             </button>
           </div>
         </div>
@@ -133,49 +186,12 @@ export class DebugOverlay {
         </div>
 
         <div class="debug-section">
-          <div class="section-title">Hand Pivots (Local SVG Coordinates)</div>
-          <div class="control-group-box">
-            <div class="box-subtitle">Hour Hand Pivot</div>
-            <div class="control-row compact">
-              <label>X</label>
-              <input type="number" id="num-hour-x" class="control-num" value="${manifest.hands.hour.pivot.x}" />
-              <label>Y</label>
-              <input type="number" id="num-hour-y" class="control-num" value="${manifest.hands.hour.pivot.y}" />
-            </div>
-          </div>
-          <div class="control-group-box">
-            <div class="box-subtitle">Minute Hand Pivot</div>
-            <div class="control-row compact">
-              <label>X</label>
-              <input type="number" id="num-minute-x" class="control-num" value="${manifest.hands.minute.pivot.x}" />
-              <label>Y</label>
-              <input type="number" id="num-minute-y" class="control-num" value="${manifest.hands.minute.pivot.y}" />
-            </div>
-          </div>
-          <div class="control-group-box">
-            <div class="box-subtitle">Second Hand Pivot</div>
-            <div class="control-row compact">
-              <label>X</label>
-              <input type="number" id="num-second-x" class="control-num" value="${manifest.hands.second.pivot.x}" />
-              <label>Y</label>
-              <input type="number" id="num-second-y" class="control-num" value="${manifest.hands.second.pivot.y}" />
-            </div>
-          </div>
-        </div>
-
-        <div class="debug-section">
           <div class="section-title">Pendulum Physics & Hinge</div>
           <div class="control-row">
             <label>Pivot X (Canvas)</label>
             <input type="number" id="num-pend-pivot-x" class="control-num" value="${manifest.pendulum.pivot.x}" />
             <label>Pivot Y (Canvas)</label>
             <input type="number" id="num-pend-pivot-y" class="control-num" value="${manifest.pendulum.pivot.y}" />
-          </div>
-          <div class="control-row">
-            <label>Anchor X (SVG)</label>
-            <input type="number" id="num-pend-anchor-x" class="control-num" value="${manifest.pendulum.anchor.x}" />
-            <label>Anchor Y (SVG)</label>
-            <input type="number" id="num-pend-anchor-y" class="control-num" value="${manifest.pendulum.anchor.y}" />
           </div>
           <div class="control-row">
             <label>Period T (sec)</label>
@@ -187,7 +203,7 @@ export class DebugOverlay {
       </div>
 
       <div class="debug-footer">
-        <span class="shortcut-tip">Press <kbd>H</kbd> to toggle HUD</span>
+        <span class="shortcut-tip">Press <kbd>H</kbd> to toggle HUD  •  <kbd>T</kbd> to switch Theme</span>
       </div>
     `;
 
@@ -195,14 +211,28 @@ export class DebugOverlay {
   }
 
   private attachEventListeners(): void {
-    const manifest = this.themeLoader.getManifest();
+    const manifest = this.getActiveManifest();
     if (!manifest) return;
 
+    // Theme switching buttons
+    const themeBtns = this.panelElement.querySelectorAll('.theme-select-btn');
+    themeBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const themeId = btn.getAttribute('data-theme-id');
+        if (themeId && this.themeManager) {
+          this.themeManager.setTheme(themeId);
+        }
+      });
+    });
+
     // Toggle crosshairs button
-    const btnCrosshairs = this.panelElement.querySelector('#btn-toggle-crosshairs') as HTMLButtonElement;
+    const btnCrosshairs = this.panelElement.querySelector(
+      '#btn-toggle-crosshairs'
+    ) as HTMLButtonElement;
     if (btnCrosshairs) {
       btnCrosshairs.addEventListener('click', () => {
         this.showCrosshairs = !this.showCrosshairs;
+        this.clockEngine.setShowDebugGrid(this.showCrosshairs);
         btnCrosshairs.classList.toggle('active', this.showCrosshairs);
         btnCrosshairs.textContent = `Crosshairs: ${this.showCrosshairs ? 'ON' : 'OFF'}`;
         this.updateCrosshairs();
@@ -221,9 +251,24 @@ export class DebugOverlay {
       btnDoorbell.addEventListener('click', () => {
         this.notificationManager.notify({
           category: 'doorbell',
-          title: 'Front Doorbell',
-          message: 'Motion detected at front entrance — package arrived.',
+          priority: 'normal',
+          title: 'PERIMETER_NODE_01 // DOORBELL',
+          message: 'Optical sensor triggered at main airlock — courier package detected.',
           timeoutMs: 6500
+        });
+      });
+    }
+
+    // Urgent Alert button
+    const btnUrgent = this.panelElement.querySelector('#btn-urgent-alert');
+    if (btnUrgent) {
+      btnUrgent.addEventListener('click', () => {
+        this.notificationManager.notify({
+          category: 'alert',
+          priority: 'urgent',
+          title: 'CRITICAL_FAULT // OVERVOLTAGE',
+          message: 'Transient surge detected on L4_CHRONO_BUS — routing electron packet dump.',
+          timeoutMs: 7500
         });
       });
     }
@@ -241,7 +286,9 @@ export class DebugOverlay {
     }
 
     // Fast-Forward Time button
-    const btnFastForward = this.panelElement.querySelector('#btn-fast-forward') as HTMLButtonElement;
+    const btnFastForward = this.panelElement.querySelector(
+      '#btn-fast-forward'
+    ) as HTMLButtonElement;
     if (btnFastForward) {
       btnFastForward.addEventListener('click', () => {
         const currentMultiplier = this.clockEngine.getTimeMultiplier();
@@ -257,20 +304,6 @@ export class DebugOverlay {
       });
     }
 
-    // Copy manifest button
-    const btnCopy = this.panelElement.querySelector('#btn-copy-manifest');
-    if (btnCopy) {
-      btnCopy.addEventListener('click', () => {
-        const json = JSON.stringify(manifest, null, 2);
-        navigator.clipboard.writeText(json).then(() => {
-          btnCopy.textContent = '✓ Copied to Clipboard!';
-          setTimeout(() => {
-            btnCopy.textContent = '📋 Copy theme.json';
-          }, 2000);
-        });
-      });
-    }
-
     // Dial Center synchronization
     const inputDialX = this.panelElement.querySelector('#input-dial-x') as HTMLInputElement;
     const numDialX = this.panelElement.querySelector('#num-dial-x') as HTMLInputElement;
@@ -281,7 +314,6 @@ export class DebugOverlay {
       manifest.dial.center.x = val;
       inputDialX.value = String(val);
       numDialX.value = String(val);
-      this.themeLoader.applyPlacement();
       this.updateCrosshairs();
     };
 
@@ -289,74 +321,38 @@ export class DebugOverlay {
       manifest.dial.center.y = val;
       inputDialY.value = String(val);
       numDialY.value = String(val);
-      this.themeLoader.applyPlacement();
       this.updateCrosshairs();
     };
 
-    inputDialX?.addEventListener('input', (e) => syncDialX(Number((e.target as HTMLInputElement).value)));
-    numDialX?.addEventListener('change', (e) => syncDialX(Number((e.target as HTMLInputElement).value)));
-    inputDialY?.addEventListener('input', (e) => syncDialY(Number((e.target as HTMLInputElement).value)));
-    numDialY?.addEventListener('change', (e) => syncDialY(Number((e.target as HTMLInputElement).value)));
-
-    // Hour Hand Pivot
-    const numHourX = this.panelElement.querySelector('#num-hour-x') as HTMLInputElement;
-    const numHourY = this.panelElement.querySelector('#num-hour-y') as HTMLInputElement;
-    const updateHour = () => {
-      manifest.hands.hour.pivot.x = Number(numHourX.value);
-      manifest.hands.hour.pivot.y = Number(numHourY.value);
-      this.themeLoader.applyPlacement();
-      this.updateCrosshairs();
-    };
-    numHourX?.addEventListener('change', updateHour);
-    numHourY?.addEventListener('change', updateHour);
-
-    // Minute Hand Pivot
-    const numMinX = this.panelElement.querySelector('#num-minute-x') as HTMLInputElement;
-    const numMinY = this.panelElement.querySelector('#num-minute-y') as HTMLInputElement;
-    const updateMinute = () => {
-      manifest.hands.minute.pivot.x = Number(numMinX.value);
-      manifest.hands.minute.pivot.y = Number(numMinY.value);
-      this.themeLoader.applyPlacement();
-      this.updateCrosshairs();
-    };
-    numMinX?.addEventListener('change', updateMinute);
-    numMinY?.addEventListener('change', updateMinute);
-
-    // Second Hand Pivot
-    const numSecX = this.panelElement.querySelector('#num-second-x') as HTMLInputElement;
-    const numSecY = this.panelElement.querySelector('#num-second-y') as HTMLInputElement;
-    const updateSecond = () => {
-      manifest.hands.second.pivot.x = Number(numSecX.value);
-      manifest.hands.second.pivot.y = Number(numSecY.value);
-      this.themeLoader.applyPlacement();
-      this.updateCrosshairs();
-    };
-    numSecX?.addEventListener('change', updateSecond);
-    numSecY?.addEventListener('change', updateSecond);
+    inputDialX?.addEventListener('input', (e) =>
+      syncDialX(Number((e.target as HTMLInputElement).value))
+    );
+    numDialX?.addEventListener('change', (e) =>
+      syncDialX(Number((e.target as HTMLInputElement).value))
+    );
+    inputDialY?.addEventListener('input', (e) =>
+      syncDialY(Number((e.target as HTMLInputElement).value))
+    );
+    numDialY?.addEventListener('change', (e) =>
+      syncDialY(Number((e.target as HTMLInputElement).value))
+    );
 
     // Pendulum Inputs
     const numPendPivotX = this.panelElement.querySelector('#num-pend-pivot-x') as HTMLInputElement;
     const numPendPivotY = this.panelElement.querySelector('#num-pend-pivot-y') as HTMLInputElement;
-    const numPendAnchorX = this.panelElement.querySelector('#num-pend-anchor-x') as HTMLInputElement;
-    const numPendAnchorY = this.panelElement.querySelector('#num-pend-anchor-y') as HTMLInputElement;
     const numPendPeriod = this.panelElement.querySelector('#num-pend-period') as HTMLInputElement;
     const numPendAngle = this.panelElement.querySelector('#num-pend-angle') as HTMLInputElement;
 
     const updatePendulum = () => {
       manifest.pendulum.pivot.x = Number(numPendPivotX.value);
       manifest.pendulum.pivot.y = Number(numPendPivotY.value);
-      manifest.pendulum.anchor.x = Number(numPendAnchorX.value);
-      manifest.pendulum.anchor.y = Number(numPendAnchorY.value);
       manifest.pendulum.periodSeconds = Number(numPendPeriod.value);
       manifest.pendulum.maxAngleDeg = Number(numPendAngle.value);
-      this.themeLoader.applyPlacement();
       this.updateCrosshairs();
     };
 
     numPendPivotX?.addEventListener('change', updatePendulum);
     numPendPivotY?.addEventListener('change', updatePendulum);
-    numPendAnchorX?.addEventListener('change', updatePendulum);
-    numPendAnchorY?.addEventListener('change', updatePendulum);
     numPendPeriod?.addEventListener('change', updatePendulum);
     numPendAngle?.addEventListener('change', updatePendulum);
   }
@@ -370,7 +366,7 @@ export class DebugOverlay {
       return;
     }
 
-    const manifest = this.themeLoader.getManifest();
+    const manifest = this.getActiveManifest();
     if (!manifest) return;
 
     const dialX = manifest.dial.center.x;
@@ -438,15 +434,18 @@ export class DebugOverlay {
 
   private setupKeyboardShortcuts(): void {
     window.addEventListener('keydown', (e) => {
-      // Toggle HUD on 'H' or 'h' (unless inside an input field)
+      const activeTag = document.activeElement?.tagName.toLowerCase();
+      if (activeTag === 'input' || activeTag === 'textarea') return;
+
       if (e.key === 'h' || e.key === 'H') {
-        const activeTag = document.activeElement?.tagName.toLowerCase();
-        if (activeTag !== 'input' && activeTag !== 'textarea') {
-          e.preventDefault();
-          this.toggleHUD();
-        }
+        e.preventDefault();
+        this.toggleHUD();
+      } else if ((e.key === 't' || e.key === 'T') && this.themeManager) {
+        e.preventDefault();
+        const nextId =
+          this.themeManager.getActiveThemeId() === 'pcb_2049' ? 'vienna_classic' : 'pcb_2049';
+        this.themeManager.setTheme(nextId);
       }
     });
   }
 }
-
