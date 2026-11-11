@@ -10,7 +10,7 @@ services:
     environment:
       - RUST_LOG=grandfather_clock_backend=debug,tower_http=info
       - PORT=8080
-      - MQTT_BROKER_HOST=mosquitto:1883
+      - MQTT_BROKER_HOST=192.168.0.69:1883
       - MQTT_CLIENT_ID=clock_backend_daemon
     volumes:
       - ./backend:/app
@@ -37,4 +37,3 @@ volumes:
     name: grandfather_clock_cargo_registry
   cargo_git:
     name: grandfather_clock_cargo_git
-
