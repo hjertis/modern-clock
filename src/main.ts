@@ -3,6 +3,7 @@ import { ThemeLoader, ClockDomElements } from './core/themeLoader';
 import { ClockEngine } from './core/clockEngine';
 import { NotificationManager } from './core/notificationManager';
 import { DebugOverlay } from './core/debugOverlay';
+import { ClockWebSocketClient } from './core/wsClient';
 import { NotificationPayload } from './types/theme';
 
 export interface ClockPublicAPI {
@@ -15,6 +16,7 @@ export interface ClockPublicAPI {
   engine: ClockEngine;
   loader: ThemeLoader;
   notifications: NotificationManager;
+  ws: ClockWebSocketClient;
 }
 
 declare global {
@@ -87,23 +89,38 @@ async function bootstrap() {
     clockEngine.setManifest(manifest);
     clockEngine.start();
 
-    // 5. Initialize Debug Overlay & HUD
-    const debugOverlay = new DebugOverlay(
+    // 5. Initialize WebSocket connection to backend daemon
+    let debugOverlay: DebugOverlay | null = null;
+    const wsClient = new ClockWebSocketClient({
+      clockEngine,
+      notificationManager,
+      themeLoader,
+      onStatusChange: (status, url) => {
+        debugOverlay?.updateWSStatus(status, url);
+      }
+    });
+
+    // 6. Initialize Debug Overlay & HUD
+    debugOverlay = new DebugOverlay(
       document.body,
       crosshairs,
       clockEngine,
       themeLoader,
-      notificationManager
+      notificationManager,
+      wsClient
     );
 
     // Pill button toggles HUD
     if (hudTogglePill) {
       hudTogglePill.addEventListener('click', () => {
-        debugOverlay.toggleHUD();
+        debugOverlay?.toggleHUD();
       });
     }
 
-    // 6. Expose global clock API for kiosk / smart home automation integration
+    // Connect WebSocket
+    wsClient.connect();
+
+    // 7. Expose global clock API for kiosk / smart home automation integration
     const publicAPI: ClockPublicAPI = {
       notify: (payload: NotificationPayload) => notificationManager.notify(payload),
       dismiss: (id: string) => notificationManager.dismiss(id),
@@ -113,7 +130,8 @@ async function bootstrap() {
       setTimeMultiplier: (multiplier: number) => clockEngine.setTimeMultiplier(multiplier),
       engine: clockEngine,
       loader: themeLoader,
-      notifications: notificationManager
+      notifications: notificationManager,
+      ws: wsClient
     };
 
     window.clock = publicAPI;

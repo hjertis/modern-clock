@@ -30,7 +30,11 @@ export class ClockAudioEngine {
     window.addEventListener('touchstart', unlock, { once: true });
   }
 
-  private initAudioContext(): AudioContext {
+  public getIsUnlocked(): boolean {
+    return this.isUnlocked;
+  }
+
+  public initAudioContext(): AudioContext {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AudioCtx();

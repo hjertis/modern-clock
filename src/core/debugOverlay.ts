@@ -2,6 +2,7 @@ import { ThemeManifest } from '../types/theme';
 import { ClockEngine } from './clockEngine';
 import { ThemeLoader } from './themeLoader';
 import { NotificationManager } from './notificationManager';
+import { ClockWebSocketClient, WSStatus } from './wsClient';
 
 export class DebugOverlay {
   private container: HTMLElement;
@@ -10,6 +11,7 @@ export class DebugOverlay {
   private clockEngine: ClockEngine;
   private themeLoader: ThemeLoader;
   private notificationManager: NotificationManager;
+  private wsClient?: ClockWebSocketClient;
   private isVisible = true;
   private showCrosshairs = true;
 
@@ -18,13 +20,15 @@ export class DebugOverlay {
     crosshairsLayer: HTMLElement,
     clockEngine: ClockEngine,
     themeLoader: ThemeLoader,
-    notificationManager: NotificationManager
+    notificationManager: NotificationManager,
+    wsClient?: ClockWebSocketClient
   ) {
     this.container = container;
     this.crosshairsLayer = crosshairsLayer;
     this.clockEngine = clockEngine;
     this.themeLoader = themeLoader;
     this.notificationManager = notificationManager;
+    this.wsClient = wsClient;
 
     this.initPanel();
     this.setupKeyboardShortcuts();
@@ -87,6 +91,10 @@ export class DebugOverlay {
           <div class="debug-stat">
             <span class="stat-label">Mode</span>
             <span id="debug-mode-readout" class="stat-value font-mono">${this.clockEngine.getSecondMode().toUpperCase()}</span>
+          </div>
+          <div class="debug-stat">
+            <span class="stat-label">WebSocket</span>
+            <span id="debug-ws-readout" class="stat-value font-mono">${this.wsClient ? this.wsClient.getStatus().toUpperCase() : 'DISABLED'}</span>
           </div>
         </div>
 
@@ -409,6 +417,23 @@ export class DebugOverlay {
   public toggleHUD(): void {
     this.isVisible = !this.isVisible;
     this.panelElement.classList.toggle('hidden', !this.isVisible);
+  }
+
+  public updateWSStatus(status: WSStatus, url?: string): void {
+    const wsEl = this.panelElement.querySelector('#debug-ws-readout') as HTMLElement | null;
+    if (wsEl) {
+      wsEl.textContent = status.toUpperCase();
+      if (status === 'connected') {
+        wsEl.style.color = '#30d158';
+      } else if (status === 'connecting' || status === 'reconnecting') {
+        wsEl.style.color = '#ffd60a';
+      } else {
+        wsEl.style.color = '#ff453a';
+      }
+      if (url) {
+        wsEl.setAttribute('title', url);
+      }
+    }
   }
 
   private setupKeyboardShortcuts(): void {
