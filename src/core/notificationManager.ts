@@ -1,16 +1,31 @@
 import { NotificationPayload } from '../types/theme';
 import { ThemeEvent } from '../themes/types';
+import { ClockAudioEngine } from './audioEngine';
 
 export class NotificationManager {
   private zoneElement: HTMLElement;
   private pendulumElement: HTMLElement | null;
+  private audioEngine: ClockAudioEngine | null = null;
   private activeNotifications: Map<string, { element: HTMLElement; timerId: number | null }> = new Map();
   private notificationCounter = 0;
   private onEventListeners: Array<(event: ThemeEvent) => void> = [];
 
-  constructor(zoneElement: HTMLElement, pendulumElement?: HTMLElement | null) {
+  constructor(
+    zoneElement: HTMLElement,
+    pendulumElement?: HTMLElement | null,
+    audioEngine?: ClockAudioEngine | null
+  ) {
     this.zoneElement = zoneElement;
     this.pendulumElement = pendulumElement || null;
+    this.audioEngine = audioEngine || null;
+  }
+
+  public setAudioEngine(audioEngine: ClockAudioEngine): void {
+    this.audioEngine = audioEngine;
+  }
+
+  public getAudioEngine(): ClockAudioEngine | null {
+    return this.audioEngine;
   }
 
   public addEventListener(listener: (event: ThemeEvent) => void): () => void {
@@ -98,6 +113,10 @@ export class NotificationManager {
 
     this.activeNotifications.set(id, { element: card, timerId });
     this.updatePendulumState();
+
+    // Trigger theme-adaptive procedural telemetry chirp / chime
+    const effectivePriority: 'normal' | 'urgent' = isUrgent ? 'urgent' : 'normal';
+    this.audioEngine?.playNotificationAlert(payload.priority || effectivePriority, category);
 
     // Emit reactive theme event so active theme can pulse lateral trace buses
     const themeEvent: ThemeEvent = {

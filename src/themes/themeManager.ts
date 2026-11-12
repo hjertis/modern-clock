@@ -2,6 +2,7 @@ import { ThemeManifest } from '../types/theme';
 import { Theme, ThemeConfig, ThemeEvent } from './types';
 import { ViennaClassicTheme } from './viennaClassic';
 import { Pcb2049Theme } from './pcb2049';
+import { ClockAudioEngine } from '../core/audioEngine';
 
 export type ThemeFactory = () => Theme;
 
@@ -16,6 +17,7 @@ export class ThemeManager {
 
   private registry: Map<string, { descriptor: ThemeDescriptor; create: ThemeFactory }> = new Map();
   private activeTheme: Theme | null = null;
+  private audioEngine: ClockAudioEngine | null = null;
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private stageElement: HTMLElement;
@@ -27,7 +29,8 @@ export class ThemeManager {
   constructor(
     canvas: HTMLCanvasElement,
     stageElement: HTMLElement,
-    notificationZoneElement?: HTMLElement | null
+    notificationZoneElement?: HTMLElement | null,
+    audioEngine?: ClockAudioEngine | null
   ) {
     this.canvas = canvas;
     const context = canvas.getContext('2d');
@@ -37,6 +40,9 @@ export class ThemeManager {
     this.ctx = context;
     this.stageElement = stageElement;
     this.notificationZoneElement = notificationZoneElement || null;
+    if (audioEngine) {
+      this.audioEngine = audioEngine;
+    }
 
     // Register built-in themes
     this.registerTheme(() => new ViennaClassicTheme());
@@ -57,6 +63,15 @@ export class ThemeManager {
       descriptor: { id: sample.id, name: sample.name },
       create: factory
     });
+  }
+
+  public setAudioEngine(audioEngine: ClockAudioEngine): void {
+    this.audioEngine = audioEngine;
+    this.audioEngine.setTheme(this.getActiveThemeId());
+  }
+
+  public getAudioEngine(): ClockAudioEngine | null {
+    return this.audioEngine;
   }
 
   public getAvailableThemes(): ThemeDescriptor[] {
@@ -242,7 +257,10 @@ export class ThemeManager {
       this.isTransitioning = false;
     }
 
-    // 8. Notify listeners
+    // 8. Sync audio engine sound profile to match active theme
+    this.audioEngine?.setTheme(resolvedId);
+
+    // 9. Notify listeners
     for (const listener of this.themeChangeListeners) {
       listener(nextTheme, manifest);
     }

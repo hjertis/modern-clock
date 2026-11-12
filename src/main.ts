@@ -5,6 +5,7 @@ import { NotificationManager } from './core/notificationManager';
 import { DebugOverlay } from './core/debugOverlay';
 import { ClockWebSocketClient } from './core/wsClient';
 import { ThemeManager } from './themes/themeManager';
+import { ClockAudioEngine } from './core/audioEngine';
 import { NotificationPayload, Theme } from './types/theme';
 
 export interface ClockPublicAPI {
@@ -20,6 +21,7 @@ export interface ClockPublicAPI {
   loader: ThemeLoader;
   notifications: NotificationManager;
   ws: ClockWebSocketClient;
+  audio: ClockAudioEngine;
 }
 
 declare global {
@@ -86,9 +88,10 @@ async function bootstrap() {
 
   // 3. Initialize Core Managers & Modular Theme Architecture
   const themeLoader = new ThemeLoader(elements);
-  const themeManager = new ThemeManager(canvas, stage, notificationZone);
-  const clockEngine = new ClockEngine(elements, { themeManager });
-  const notificationManager = new NotificationManager(notificationZone, pendulum);
+  const audioEngine = new ClockAudioEngine();
+  const themeManager = new ThemeManager(canvas, stage, notificationZone, audioEngine);
+  const clockEngine = new ClockEngine(elements, { themeManager, audioEngine });
+  const notificationManager = new NotificationManager(notificationZone, pendulum, audioEngine);
 
   clockEngine.setActiveNotificationsProvider(() => notificationManager.getActiveCount());
 
@@ -97,7 +100,7 @@ async function bootstrap() {
     themeManager.dispatchEvent(event);
   });
 
-  // Sync engine manifest & pill UI whenever active theme changes
+  // Sync engine manifest, pill UI, and sound profile whenever active theme changes
   const updateThemePillLabel = (themeId: string) => {
     if (!themePillLabel) return;
     if (themeId === 'pcb_2049') {
@@ -109,11 +112,11 @@ async function bootstrap() {
     }
   };
 
-
   themeManager.onThemeChange((theme, manifest) => {
     if (manifest) {
       clockEngine.setManifest(manifest);
     }
+    audioEngine.setTheme(theme.id);
     updateThemePillLabel(theme.id);
   });
 
@@ -124,6 +127,7 @@ async function bootstrap() {
     if (initialManifest) {
       clockEngine.setManifest(initialManifest);
     }
+    audioEngine.setTheme(initialTheme.id);
     updateThemePillLabel(initialTheme.id);
 
     clockEngine.start();
@@ -133,6 +137,7 @@ async function bootstrap() {
     const wsClient = new ClockWebSocketClient({
       clockEngine,
       notificationManager,
+      audioEngine,
       themeManager,
       themeLoader,
       onStatusChange: (status, url) => {
@@ -148,7 +153,8 @@ async function bootstrap() {
       themeLoader,
       notificationManager,
       wsClient,
-      themeManager
+      themeManager,
+      audioEngine
     );
 
     // Pill button toggles HUD
@@ -189,7 +195,8 @@ async function bootstrap() {
       engine: clockEngine,
       loader: themeLoader,
       notifications: notificationManager,
-      ws: wsClient
+      ws: wsClient,
+      audio: audioEngine
     };
 
     window.clock = publicAPI;

@@ -2,6 +2,7 @@ import { ClockEngine } from './clockEngine';
 import { NotificationManager } from './notificationManager';
 import { ThemeLoader } from './themeLoader';
 import { ThemeManager } from '../themes/themeManager';
+import { ClockAudioEngine } from './audioEngine';
 import { HandMode, NotificationPayload } from '../types/theme';
 
 export type WSStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
@@ -10,6 +11,7 @@ export interface WSClientOptions {
   url?: string;
   clockEngine: ClockEngine;
   notificationManager: NotificationManager;
+  audioEngine?: ClockAudioEngine;
   themeManager?: ThemeManager;
   themeLoader?: ThemeLoader;
   onStatusChange?: (status: WSStatus, url: string) => void;
@@ -24,6 +26,9 @@ export interface BackendInitMessage {
     theme_id?: string;
     sleepOverride?: boolean;
     mode?: HandMode;
+    muted?: boolean;
+    volume?: number;
+    chimes?: boolean;
   };
 }
 
@@ -45,6 +50,9 @@ export interface BackendConfigMessage {
   theme_id?: string;
   sleepOverride?: boolean;
   mode?: HandMode;
+  muted?: boolean;
+  volume?: number;
+  chimes?: boolean;
   timestamp?: string;
 }
 
@@ -54,11 +62,19 @@ export interface SetThemeActionMessage {
   theme?: string;
 }
 
+export interface SetAudioActionMessage {
+  action: 'set_audio';
+  muted?: boolean;
+  volume?: number;
+  chimes?: boolean;
+}
+
 export type BackendIncomingMessage =
   | BackendInitMessage
   | BackendNotifyMessage
   | BackendConfigMessage
-  | SetThemeActionMessage;
+  | SetThemeActionMessage
+  | SetAudioActionMessage;
 
 export class ClockWebSocketClient {
   public static readonly DEFAULT_WS_URL = 'ws://192.168.0.69:8088/ws';
@@ -67,6 +83,7 @@ export class ClockWebSocketClient {
   private socket: WebSocket | null = null;
   private clockEngine: ClockEngine;
   private notificationManager: NotificationManager;
+  private audioEngine?: ClockAudioEngine;
   private themeManager?: ThemeManager;
   private themeLoader?: ThemeLoader;
   private onStatusChangeCallback?: (status: WSStatus, url: string) => void;
@@ -80,6 +97,7 @@ export class ClockWebSocketClient {
   constructor(options: WSClientOptions) {
     this.clockEngine = options.clockEngine;
     this.notificationManager = options.notificationManager;
+    this.audioEngine = options.audioEngine;
     this.themeManager = options.themeManager;
     this.themeLoader = options.themeLoader;
     this.onStatusChangeCallback = options.onStatusChange;
@@ -162,6 +180,14 @@ export class ClockWebSocketClient {
     return this.status === 'connected' && this.socket?.readyState === WebSocket.OPEN;
   }
 
+  public setAudioEngine(audioEngine: ClockAudioEngine): void {
+    this.audioEngine = audioEngine;
+  }
+
+  public getAudioEngine(): ClockAudioEngine | undefined {
+    return this.audioEngine;
+  }
+
   /**
    * Send JSON message to backend daemon if needed
    */
@@ -196,6 +222,33 @@ export class ClockWebSocketClient {
       return;
     }
 
+    // 2. Handle `{ "action": "set_audio", "muted": bool, "volume": number, "chimes": bool }`
+    if (
+      ('action' in msg && msg.action === 'set_audio') ||
+      ('type' in msg && (msg.type === 'set_audio' || msg.type === 'audio'))
+    ) {
+      const audioMsg = msg as {
+        action?: string;
+        type?: string;
+        muted?: boolean;
+        volume?: number;
+        chimes?: boolean;
+      };
+      if (this.audioEngine) {
+        if (typeof audioMsg.muted === 'boolean') {
+          this.audioEngine.setMuted(audioMsg.muted);
+        }
+        if (typeof audioMsg.volume === 'number') {
+          this.audioEngine.setVolume(audioMsg.volume);
+        }
+        if (typeof audioMsg.chimes === 'boolean') {
+          this.audioEngine.setChimesEnabled(audioMsg.chimes);
+        }
+        console.log('[Clock WS] Audio settings updated:', this.audioEngine.getState());
+      }
+      return;
+    }
+
     const typedMsg = msg as BackendIncomingMessage;
     if (!('type' in typedMsg)) return;
 
@@ -208,6 +261,17 @@ export class ClockWebSocketClient {
             (typedMsg.config.mode === 'tick' || typedMsg.config.mode === 'sweep')
           ) {
             this.clockEngine.setSecondMode(typedMsg.config.mode);
+          }
+          if (this.audioEngine) {
+            if (typeof typedMsg.config.muted === 'boolean') {
+              this.audioEngine.setMuted(typedMsg.config.muted);
+            }
+            if (typeof typedMsg.config.volume === 'number') {
+              this.audioEngine.setVolume(typedMsg.config.volume);
+            }
+            if (typeof typedMsg.config.chimes === 'boolean') {
+              this.audioEngine.setChimesEnabled(typedMsg.config.chimes);
+            }
           }
           const initTheme = typedMsg.config.theme_id || typedMsg.config.theme;
           // Only override localStorage theme on init if backend was explicitly configured to a non-'default' theme
@@ -243,6 +307,17 @@ export class ClockWebSocketClient {
       case 'config': {
         if (typedMsg.mode && (typedMsg.mode === 'tick' || typedMsg.mode === 'sweep')) {
           this.clockEngine.setSecondMode(typedMsg.mode);
+        }
+        if (this.audioEngine) {
+          if (typeof typedMsg.muted === 'boolean') {
+            this.audioEngine.setMuted(typedMsg.muted);
+          }
+          if (typeof typedMsg.volume === 'number') {
+            this.audioEngine.setVolume(typedMsg.volume);
+          }
+          if (typeof typedMsg.chimes === 'boolean') {
+            this.audioEngine.setChimesEnabled(typedMsg.chimes);
+          }
         }
         const cfgTheme = typedMsg.theme_id || typedMsg.theme;
         if (cfgTheme) {

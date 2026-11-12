@@ -4,16 +4,19 @@ import { ClockDomElements } from './themeLoader';
 import { ThemeManager } from '../themes/themeManager';
 import { TimeData, PhysicsData, TelemetryData } from '../themes/types';
 import { WSStatus } from './wsClient';
+import { ClockAudioEngine } from './audioEngine';
 
 export interface ClockEngineOptions {
   secondMode?: HandMode;
   timeMultiplier?: number;
   themeManager?: ThemeManager;
+  audioEngine?: ClockAudioEngine;
 }
 
 export class ClockEngine {
   private elements?: ClockDomElements;
   private themeManager: ThemeManager | null = null;
+  private audioEngine: ClockAudioEngine | null = null;
   private manifest: ThemeManifest | null = null;
   private isRunning = false;
   private animationFrameId: number | null = null;
@@ -26,6 +29,10 @@ export class ClockEngine {
   private baseSimulatedTime = Date.now();
   private baseRealTime = performance.now();
   private lastFrameTimeMs = performance.now();
+
+  // Zero-drift phase-locked audio tracking
+  private lastPendulumAngleDeg: number | null = null;
+  private lastSimulatedMinute = -1;
 
   // Telemetry state
   private smoothedFps = 60.0;
@@ -43,12 +50,23 @@ export class ClockEngine {
     if (options?.themeManager) {
       this.themeManager = options.themeManager;
     }
+    if (options?.audioEngine) {
+      this.audioEngine = options.audioEngine;
+    }
     if (options?.secondMode) {
       this.secondMode = options.secondMode;
     }
     if (options?.timeMultiplier) {
       this.timeMultiplier = options.timeMultiplier;
     }
+  }
+
+  public setAudioEngine(audioEngine: ClockAudioEngine): void {
+    this.audioEngine = audioEngine;
+  }
+
+  public getAudioEngine(): ClockAudioEngine | null {
+    return this.audioEngine;
   }
 
   public setThemeManager(themeManager: ThemeManager): void {
@@ -98,6 +116,8 @@ export class ClockEngine {
     this.baseRealTime = performance.now();
     this.lastFrameTimeMs = this.baseRealTime;
     this.baseSimulatedTime = Date.now();
+    this.lastPendulumAngleDeg = null;
+    this.lastSimulatedMinute = -1;
 
     const loop = () => {
       if (!this.isRunning) return;
@@ -153,6 +173,32 @@ export class ClockEngine {
     const pendulumAngleRad = (pendulumAngleDeg * Math.PI) / 180;
     const angularVelocityNorm = -Math.sin(phaseRad);
     const angularVelocityRad = -((maxAngleDeg * Math.PI) / 180) * omega * Math.sin(phaseRad);
+
+    // 2b. Zero-Drift Sync: Trigger escapement tick directly from pendulum zero-crossing
+    if (this.lastPendulumAngleDeg !== null && this.timeMultiplier <= 3.0) {
+      if (this.lastPendulumAngleDeg < 0 && pendulumAngleDeg >= 0) {
+        // Left-to-right zero-crossing -> 'tick'
+        this.audioEngine?.onEscapementTick('tick');
+      } else if (this.lastPendulumAngleDeg > 0 && pendulumAngleDeg <= 0) {
+        // Right-to-left zero-crossing -> 'tock'
+        this.audioEngine?.onEscapementTick('tock');
+      }
+    }
+    this.lastPendulumAngleDeg = pendulumAngleDeg;
+
+    // 2c. Hourly and Quarter-Hourly Procedural Chimes
+    const currentMinute = currentDate.getMinutes();
+    const currentHour = currentDate.getHours();
+    if (this.lastSimulatedMinute !== -1 && this.lastSimulatedMinute !== currentMinute) {
+      if (this.timeMultiplier <= 2.0 && this.audioEngine) {
+        if (currentMinute === 0) {
+          this.audioEngine.onHour(currentHour);
+        } else if (currentMinute === 15 || currentMinute === 30 || currentMinute === 45) {
+          this.audioEngine.onQuarter(currentMinute);
+        }
+      }
+    }
+    this.lastSimulatedMinute = currentMinute;
 
     const activeNotificationsCount = this.activeNotificationsProvider();
     const dimmed = activeNotificationsCount > 0;

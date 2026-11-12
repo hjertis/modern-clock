@@ -4,6 +4,7 @@ import { ThemeLoader } from './themeLoader';
 import { ThemeManager } from '../themes/themeManager';
 import { NotificationManager } from './notificationManager';
 import { ClockWebSocketClient, WSStatus } from './wsClient';
+import { ClockAudioEngine } from './audioEngine';
 
 export class DebugOverlay {
   private container: HTMLElement;
@@ -14,6 +15,7 @@ export class DebugOverlay {
   private themeManager?: ThemeManager;
   private notificationManager: NotificationManager;
   private wsClient?: ClockWebSocketClient;
+  private audioEngine?: ClockAudioEngine;
   private isVisible = false;
   private showCrosshairs = false;
 
@@ -24,7 +26,8 @@ export class DebugOverlay {
     themeLoader: ThemeLoader,
     notificationManager: NotificationManager,
     wsClient?: ClockWebSocketClient,
-    themeManager?: ThemeManager
+    themeManager?: ThemeManager,
+    audioEngine?: ClockAudioEngine
   ) {
     this.container = container;
     this.crosshairsLayer = crosshairsLayer;
@@ -33,6 +36,7 @@ export class DebugOverlay {
     this.notificationManager = notificationManager;
     this.wsClient = wsClient;
     this.themeManager = themeManager;
+    this.audioEngine = audioEngine;
 
     this.initPanel();
     this.setupKeyboardShortcuts();
@@ -171,6 +175,29 @@ export class DebugOverlay {
           </div>
         </div>
 
+        <!-- Procedural Web Audio Engine Controls -->
+        <div class="debug-section">
+          <div class="section-title">Procedural Web Audio Engine (Zero External Audio)</div>
+          <div class="debug-button-grid">
+            <button id="btn-toggle-mute" class="debug-btn ${this.audioEngine?.getMuted() ? 'active' : ''}">
+              ${this.audioEngine?.getMuted() ? '🔇 Audio Muted' : '🔊 Audio Active'}
+            </button>
+            <button id="btn-toggle-chimes" class="debug-btn ${this.audioEngine?.getChimesEnabled() ? 'active' : ''}">
+              ${this.audioEngine?.getChimesEnabled() ? '🔔 Chimes: ON' : '🔕 Chimes: OFF'}
+            </button>
+            <button id="btn-test-tick" class="debug-btn">
+              ⏱ Test Escapement
+            </button>
+            <button id="btn-test-chime" class="debug-btn">
+              🎵 Test Hour Chime
+            </button>
+          </div>
+          <div class="control-row" style="margin-top: 8px;">
+            <label>Master Volume: <span id="debug-volume-val">${Math.round((this.audioEngine?.getVolume() ?? 0.5) * 100)}%</span></label>
+            <input type="range" id="input-audio-volume" min="0" max="100" value="${Math.round((this.audioEngine?.getVolume() ?? 0.5) * 100)}" />
+          </div>
+        </div>
+
         <!-- Live Calibration Sliders / Inputs -->
         <div class="debug-section">
           <div class="section-title">Dial Center (Canvas 1080×1920)</div>
@@ -301,6 +328,60 @@ export class DebugOverlay {
           this.clockEngine.setTimeMultiplier(1.0);
           btnFastForward.textContent = '⏩ 10x Fast-Forward';
           btnFastForward.classList.remove('active');
+        }
+      });
+    }
+
+    // Audio Engine Controls
+    const btnToggleMute = this.panelElement.querySelector('#btn-toggle-mute') as HTMLButtonElement;
+    if (btnToggleMute && this.audioEngine) {
+      btnToggleMute.addEventListener('click', () => {
+        if (!this.audioEngine) return;
+        this.audioEngine.unlock();
+        const isMuted = this.audioEngine.toggleMute();
+        btnToggleMute.textContent = isMuted ? '🔇 Audio Muted' : '🔊 Audio Active';
+        btnToggleMute.classList.toggle('active', isMuted);
+      });
+    }
+
+    const btnToggleChimes = this.panelElement.querySelector('#btn-toggle-chimes') as HTMLButtonElement;
+    if (btnToggleChimes && this.audioEngine) {
+      btnToggleChimes.addEventListener('click', () => {
+        if (!this.audioEngine) return;
+        this.audioEngine.unlock();
+        const enabled = this.audioEngine.toggleChimes();
+        btnToggleChimes.textContent = enabled ? '🔔 Chimes: ON' : '🔕 Chimes: OFF';
+        btnToggleChimes.classList.toggle('active', enabled);
+      });
+    }
+
+    const btnTestTick = this.panelElement.querySelector('#btn-test-tick') as HTMLButtonElement;
+    if (btnTestTick && this.audioEngine) {
+      btnTestTick.addEventListener('click', () => {
+        if (!this.audioEngine) return;
+        this.audioEngine.unlock();
+        this.audioEngine.onEscapementTick();
+      });
+    }
+
+    const btnTestChime = this.panelElement.querySelector('#btn-test-chime') as HTMLButtonElement;
+    if (btnTestChime && this.audioEngine) {
+      btnTestChime.addEventListener('click', () => {
+        if (!this.audioEngine) return;
+        this.audioEngine.unlock();
+        this.audioEngine.onHour(new Date().getHours());
+      });
+    }
+
+    const inputVolume = this.panelElement.querySelector('#input-audio-volume') as HTMLInputElement;
+    const volumeVal = this.panelElement.querySelector('#debug-volume-val');
+    if (inputVolume && this.audioEngine) {
+      inputVolume.addEventListener('input', (e) => {
+        if (!this.audioEngine) return;
+        const vol = Number((e.target as HTMLInputElement).value) / 100;
+        this.audioEngine.setVolume(vol);
+        if (volumeVal) {
+          volumeVal.textContent = `${Math.round(vol * 100)}%`;
         }
       });
     }
