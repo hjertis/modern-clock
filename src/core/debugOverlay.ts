@@ -5,6 +5,7 @@ import { ThemeManager } from '../themes/themeManager';
 import { NotificationManager } from './notificationManager';
 import { ClockWebSocketClient, WSStatus } from './wsClient';
 import { ClockAudioEngine } from './audioEngine';
+import { SleepManager } from './sleepManager';
 
 export class DebugOverlay {
   private container: HTMLElement;
@@ -16,6 +17,7 @@ export class DebugOverlay {
   private notificationManager: NotificationManager;
   private wsClient?: ClockWebSocketClient;
   private audioEngine?: ClockAudioEngine;
+  private sleepManager?: SleepManager;
   private isVisible = false;
   private showCrosshairs = false;
 
@@ -27,7 +29,8 @@ export class DebugOverlay {
     notificationManager: NotificationManager,
     wsClient?: ClockWebSocketClient,
     themeManager?: ThemeManager,
-    audioEngine?: ClockAudioEngine
+    audioEngine?: ClockAudioEngine,
+    sleepManager?: SleepManager
   ) {
     this.container = container;
     this.crosshairsLayer = crosshairsLayer;
@@ -37,6 +40,13 @@ export class DebugOverlay {
     this.wsClient = wsClient;
     this.themeManager = themeManager;
     this.audioEngine = audioEngine;
+    this.sleepManager = sleepManager || clockEngine.getSleepManager() || undefined;
+
+    if (this.sleepManager) {
+      this.sleepManager.onModeChange(() => {
+        this.refreshHudModeButtons();
+      });
+    }
 
     this.initPanel();
     this.setupKeyboardShortcuts();
@@ -156,6 +166,25 @@ export class DebugOverlay {
           </div>
         </div>
 
+        <!-- Power & Presence States -->
+        <div class="debug-section">
+          <div class="section-title">Power & Presence States</div>
+          <div class="debug-button-grid">
+            <button id="btn-mode-active" class="debug-btn mode-btn ${this.sleepManager?.getMode() === 'active' ? 'active' : ''}">
+              ☀️ Active
+            </button>
+            <button id="btn-mode-silent" class="debug-btn mode-btn ${this.sleepManager?.getMode() === 'silent' ? 'active' : ''}">
+              🤫 Silent
+            </button>
+            <button id="btn-mode-night" class="debug-btn mode-btn ${this.sleepManager?.getMode() === 'night' ? 'active' : ''}">
+              🌙 Night (30 FPS)
+            </button>
+            <button id="btn-mode-sleep" class="debug-btn mode-btn ${this.sleepManager?.getMode() === 'sleep' ? 'active' : ''}">
+              💤 Sleep (Cat-Safe 1 FPS)
+            </button>
+          </div>
+        </div>
+
         <!-- Quick Action Buttons -->
         <div class="debug-section">
           <div class="section-title">Reactive Telemetry & Actions</div>
@@ -241,6 +270,22 @@ export class DebugOverlay {
   private attachEventListeners(): void {
     const manifest = this.getActiveManifest();
     if (!manifest) return;
+
+    // Mode switching buttons
+    const setupModeBtn = (btnId: string, mode: 'active' | 'silent' | 'night' | 'sleep') => {
+      const btn = this.panelElement.querySelector(btnId);
+      if (btn) {
+        btn.addEventListener('click', () => {
+          this.sleepManager?.setMode(mode, true);
+          this.clockEngine.setMode(mode);
+          this.refreshHudModeButtons();
+        });
+      }
+    };
+    setupModeBtn('#btn-mode-active', 'active');
+    setupModeBtn('#btn-mode-silent', 'silent');
+    setupModeBtn('#btn-mode-night', 'night');
+    setupModeBtn('#btn-mode-sleep', 'sleep');
 
     // Theme switching buttons
     const themeBtns = this.panelElement.querySelectorAll('.theme-select-btn');
@@ -490,6 +535,22 @@ export class DebugOverlay {
         </g>
       </svg>
     `;
+  }
+
+  public refreshHudModeButtons(): void {
+    const currentMode = this.sleepManager?.getMode() || this.clockEngine.getMode();
+    const modes: Array<'active' | 'silent' | 'night' | 'sleep'> = [
+      'active',
+      'silent',
+      'night',
+      'sleep'
+    ];
+    for (const m of modes) {
+      const btn = this.panelElement.querySelector(`#btn-mode-${m}`);
+      if (btn) {
+        btn.classList.toggle('active', currentMode === m);
+      }
+    }
   }
 
   public toggleHUD(): void {

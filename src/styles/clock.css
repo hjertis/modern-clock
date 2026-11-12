@@ -69,3 +69,62 @@
   height: 1920px;
   pointer-events: none;
 }
+
+/* ==========================================================================
+   Power & Presence States: active, silent, night, sleep (Cat-Safe Mode)
+   ========================================================================== */
+
+#clock-stage {
+  transition: filter 1.2s cubic-bezier(0.25, 1, 0.5, 1),
+              opacity 1.2s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Active Mode */
+#clock-stage.mode-active {
+  filter: none;
+  opacity: 1;
+}
+
+/* Silent Mode */
+#clock-stage.mode-silent {
+  filter: none;
+  opacity: 1;
+}
+
+/* Night Mode: Smooth CSS luminance dim + warm nocturnal tint filter */
+#clock-stage.mode-night {
+  filter: brightness(var(--night-brightness, 0.20)) sepia(0.38) saturate(1.25) hue-rotate(-10deg);
+  opacity: 1;
+}
+
+/* Sleep (Cat-Safe) Mode: Smoothly fades opacity to ~5% (OLED near-black) */
+#clock-stage.mode-sleep,
+#clock-stage.night-sleep {
+  opacity: var(--sleep-opacity, 0.05) !important;
+  filter: brightness(0.08) contrast(1.1);
+  transition: opacity 1.8s cubic-bezier(0.25, 1, 0.5, 1),
+              filter 1.8s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Hide motion layers in sleep mode so pets are not attracted */
+#clock-stage.mode-sleep #clock-pendulum,
+#clock-stage.mode-sleep .clock-pendulum,
+#clock-stage.mode-sleep #notification-zone,
+#clock-stage.night-sleep #clock-pendulum,
+#clock-stage.night-sleep .clock-pendulum,
+#clock-stage.night-sleep #notification-zone {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Body level dimming for top control pills during night and sleep */
+body.clock-mode-night #top-control-pills {
+  opacity: 0.25;
+  transition: opacity 1s ease;
+}
+
+body.clock-mode-sleep #top-control-pills {
+  opacity: 0.03;
+  pointer-events: none;
+  transition: opacity 1.5s ease;
+}

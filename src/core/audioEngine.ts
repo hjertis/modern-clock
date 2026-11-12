@@ -19,6 +19,8 @@
  *    - Hour Pulse: Clean, futuristic harmonic quartz FM chime on the hour.
  */
 
+import { ClockMode, NotificationPriority } from '../types/theme';
+
 export type TickDirection =
   | 'tick'
   | 'tock'
@@ -32,6 +34,7 @@ export type SoundProfile = 'vienna_classic' | 'pcb_2049' | 'pcb_2049_emerald';
 export class ClockAudioEngine {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = false;
+  private clockMode: ClockMode = 'active';
   private volume: number = 0.5; // 0.0 to 1.0
   private chimesEnabled: boolean = true;
   private activeProfile: SoundProfile = 'pcb_2049';
@@ -165,6 +168,8 @@ export class ClockAudioEngine {
    * Alternates between 'tick' (left-to-right) and 'tock' (right-to-left).
    */
   public onEscapementTick(direction?: TickDirection): void {
+    // Mode guard: ticks muted in silent, night, and sleep modes
+    if (this.clockMode !== 'active') return;
     if (this.isMuted || this.volume <= 0) return;
 
     // Check context readiness without throwing
@@ -533,6 +538,8 @@ export class ClockAudioEngine {
    * Top of the hour hook: dispatches theme-adaptive hour chime
    */
   public onHour(hour: number): void {
+    // Mode guard: chimes muted in silent, night, and sleep modes
+    if (this.clockMode !== 'active') return;
     if (!this.chimesEnabled || this.isMuted || this.volume <= 0) return;
     if (this.activeProfile === 'vienna_classic') {
       const count = hour % 12 || 12;
@@ -547,6 +554,8 @@ export class ClockAudioEngine {
    * Quarter hour hook: dispatches subtle quarter strike
    */
   public onQuarter(minute: number): void {
+    // Mode guard: chimes muted in silent, night, and sleep modes
+    if (this.clockMode !== 'active') return;
     if (!this.chimesEnabled || this.isMuted || this.volume <= 0) return;
     if (this.activeProfile === 'vienna_classic') {
       const phraseCount = minute === 45 ? 3 : minute === 30 ? 2 : 1;
@@ -665,10 +674,24 @@ export class ClockAudioEngine {
   /**
    * Dispatches theme-adaptive notification alert sound
    */
-  public playNotificationAlert(priority?: 'normal' | 'urgent', category?: string): void {
+  public playNotificationAlert(
+    priority?: NotificationPriority | 'normal' | 'urgent',
+    category?: string
+  ): void {
+    // Mode guards
+    if (this.clockMode === 'sleep') return; // all audio muted in sleep mode
     if (this.isMuted || this.volume <= 0 || !this.ctx || this.ctx.state !== 'running') return;
 
-    const isUrgent = priority === 'urgent' || category === 'alert';
+    const isUrgent =
+      priority === 'urgent' ||
+      priority === 'high' ||
+      priority === 'critical' ||
+      category === 'alert';
+
+    // In night mode, only allow high/critical/urgent alerts
+    if (this.clockMode === 'night' && !isUrgent) {
+      return;
+    }
 
     if (this.activeProfile === 'vienna_classic') {
       if (isUrgent) {
@@ -754,19 +777,32 @@ export class ClockAudioEngine {
     return this.chimesEnabled;
   }
 
+  public setClockMode(mode: ClockMode): void {
+    this.clockMode = mode;
+    if (mode === 'sleep' || mode === 'night' || mode === 'silent') {
+      this.stopAllChimes();
+    }
+  }
+
+  public getClockMode(): ClockMode {
+    return this.clockMode;
+  }
+
   public getState(): {
     muted: boolean;
     volume: number;
     chimesEnabled: boolean;
     theme: SoundProfile;
     isUnlocked: boolean;
+    mode: ClockMode;
   } {
     return {
       muted: this.isMuted,
       volume: this.volume,
       chimesEnabled: this.chimesEnabled,
       theme: this.activeProfile,
-      isUnlocked: this.getIsUnlocked()
+      isUnlocked: this.getIsUnlocked(),
+      mode: this.clockMode
     };
   }
 }

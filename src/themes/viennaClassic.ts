@@ -246,6 +246,11 @@ export class ViennaClassicTheme implements Theme {
   public renderOverlay(ctx: CanvasRenderingContext2D, telemetryData: TelemetryData): void {
     if (!this.isMounted) return;
 
+    if (telemetryData.isSleeping) {
+      this.activePulses = [];
+      return;
+    }
+
     // Reset per-frame background flag at the end of the frame's overlay pass
     this.backgroundDrawnForFrame = false;
 

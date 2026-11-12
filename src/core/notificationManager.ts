@@ -1,4 +1,4 @@
-import { NotificationPayload } from '../types/theme';
+import { NotificationPayload, ClockMode } from '../types/theme';
 import { ThemeEvent } from '../themes/types';
 import { ClockAudioEngine } from './audioEngine';
 
@@ -7,6 +7,8 @@ export class NotificationManager {
   private pendulumElement: HTMLElement | null;
   private audioEngine: ClockAudioEngine | null = null;
   private activeNotifications: Map<string, { element: HTMLElement; timerId: number | null }> = new Map();
+  private queuedNotifications: NotificationPayload[] = [];
+  private clockMode: ClockMode = 'active';
   private notificationCounter = 0;
   private onEventListeners: Array<(event: ThemeEvent) => void> = [];
 
@@ -35,6 +37,38 @@ export class NotificationManager {
     };
   }
 
+  public setMode(mode: ClockMode): void {
+    const prevMode = this.clockMode;
+    this.clockMode = mode;
+    if (
+      (prevMode === 'night' || prevMode === 'sleep') &&
+      (mode === 'active' || mode === 'silent')
+    ) {
+      this.flushQueue();
+    }
+  }
+
+  public getMode(): ClockMode {
+    return this.clockMode;
+  }
+
+  public flushQueue(): NotificationPayload[] {
+    const queued = [...this.queuedNotifications];
+    this.queuedNotifications = [];
+    for (const item of queued) {
+      this.notify(item);
+    }
+    return queued;
+  }
+
+  public getQueuedNotifications(): NotificationPayload[] {
+    return [...this.queuedNotifications];
+  }
+
+  public clearQueue(): void {
+    this.queuedNotifications = [];
+  }
+
   public getActiveCount(): number {
     return this.activeNotifications.size;
   }
@@ -49,8 +83,26 @@ export class NotificationManager {
   public notify(payload: NotificationPayload): string {
     const id = payload.id || `notif_${Date.now()}_${++this.notificationCounter}`;
     const timeoutMs = payload.timeoutMs !== undefined ? payload.timeoutMs : 6000;
-    const isUrgent = payload.priority === 'urgent' || payload.category === 'alert';
+    const priority = payload.priority || 'normal';
+    const isHighOrCritical =
+      priority === 'urgent' ||
+      priority === 'high' ||
+      priority === 'critical' ||
+      payload.category === 'alert';
+    const isUrgent = isHighOrCritical;
     const category = payload.category || (isUrgent ? 'alert' : 'info');
+
+    // 1. In 'sleep' mode: suppress visual notification toasts
+    if (this.clockMode === 'sleep') {
+      this.queuedNotifications.push({ ...payload, id });
+      return id;
+    }
+
+    // 2. In 'night' mode: queues/suppresses low and normal priority notifications (only allowing high/critical)
+    if (this.clockMode === 'night' && !isHighOrCritical) {
+      this.queuedNotifications.push({ ...payload, id });
+      return id;
+    }
 
     // Create card element
     const card = document.createElement('div');

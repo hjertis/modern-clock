@@ -108,6 +108,11 @@ export class PcbHudOverlay {
   }
 
   public render(ctx: CanvasRenderingContext2D, telemetryData: TelemetryData): void {
+    if (telemetryData.isSleeping) {
+      this.packets = [];
+      return;
+    }
+
     const now = performance.now();
 
     // Update rolling pendulum phase history for mini oscilloscope readout

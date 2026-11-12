@@ -1,6 +1,8 @@
-import { HandMode, NotificationPayload, Point2D, ThemeManifest } from '../types/theme';
+import { HandMode, NotificationPayload, Point2D, ThemeManifest, ClockMode } from '../types/theme';
 import { HandAngles } from '../utils/math';
 import { WSStatus } from '../core/wsClient';
+
+export type { ClockMode };
 
 export type ThemeId = 'vienna_classic' | 'pcb_2049' | string;
 
@@ -64,6 +66,7 @@ export interface TelemetryData {
   secondMode: HandMode;
   timeMultiplier: number;
   isSleeping: boolean;
+  mode?: ClockMode;
   showDebugGrid: boolean;
   activeNotificationsCount: number;
   currentDate: Date;

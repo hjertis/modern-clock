@@ -1,25 +1,33 @@
-import { ThemeManifest, HandMode } from '../types/theme';
+import { ThemeManifest, HandMode, ClockMode } from '../types/theme';
 import { calculateHandAngles, calculatePendulumAngle } from '../utils/math';
 import { ClockDomElements } from './themeLoader';
 import { ThemeManager } from '../themes/themeManager';
 import { TimeData, PhysicsData, TelemetryData } from '../themes/types';
 import { WSStatus } from './wsClient';
 import { ClockAudioEngine } from './audioEngine';
+import { SleepManager } from './sleepManager';
 
 export interface ClockEngineOptions {
   secondMode?: HandMode;
   timeMultiplier?: number;
   themeManager?: ThemeManager;
   audioEngine?: ClockAudioEngine;
+  sleepManager?: SleepManager;
 }
 
 export class ClockEngine {
   private elements?: ClockDomElements;
   private themeManager: ThemeManager | null = null;
   private audioEngine: ClockAudioEngine | null = null;
+  private sleepManager: SleepManager | null = null;
   private manifest: ThemeManifest | null = null;
   private isRunning = false;
   private animationFrameId: number | null = null;
+
+  // Power & presence mode: 'active' | 'silent' | 'night' | 'sleep'
+  private currentMode: ClockMode = 'active';
+  private targetMaxFps: number | null = null; // null = uncapped, 30 for night, 1 for sleep
+  private lastRenderPerfTimeMs = 0;
 
   // Second hand mode
   private secondMode: HandMode = 'sweep';
@@ -59,6 +67,36 @@ export class ClockEngine {
     if (options?.timeMultiplier) {
       this.timeMultiplier = options.timeMultiplier;
     }
+    if (options?.sleepManager) {
+      this.setSleepManager(options.sleepManager);
+    }
+  }
+
+  public setMode(mode: ClockMode): void {
+    this.currentMode = mode;
+    if (mode === 'sleep') {
+      this.targetMaxFps = 1;
+    } else if (mode === 'night') {
+      this.targetMaxFps = 30;
+    } else {
+      this.targetMaxFps = null;
+    }
+  }
+
+  public getMode(): ClockMode {
+    return this.currentMode;
+  }
+
+  public setSleepManager(sleepManager: SleepManager): void {
+    this.sleepManager = sleepManager;
+    this.setMode(sleepManager.getMode());
+    sleepManager.onModeChange((mode) => {
+      this.setMode(mode);
+    });
+  }
+
+  public getSleepManager(): SleepManager | null {
+    return this.sleepManager;
   }
 
   public setAudioEngine(audioEngine: ClockAudioEngine): void {
@@ -144,6 +182,17 @@ export class ClockEngine {
    */
   private tick(): void {
     const nowPerf = performance.now();
+
+    // 0. FPS Throttling for Power & Presence States
+    // 'night': capped to 30 FPS. 'sleep': throttled to 1 FPS. 'active' / 'silent': uncapped.
+    if (this.targetMaxFps !== null && this.targetMaxFps > 0) {
+      const minIntervalMs = 1000 / this.targetMaxFps;
+      if (nowPerf - this.lastRenderPerfTimeMs < minIntervalMs - 1.5) {
+        return; // Throttled
+      }
+    }
+    this.lastRenderPerfTimeMs = nowPerf;
+
     const rawDeltaMs = Math.max(1, nowPerf - this.lastFrameTimeMs);
     this.lastFrameTimeMs = nowPerf;
 
@@ -155,6 +204,16 @@ export class ClockEngine {
     const currentSimulatedMs = this.baseSimulatedTime + elapsedRealMs * this.timeMultiplier;
     const currentDate = new Date(currentSimulatedMs);
 
+    // Dynamic sleep evaluation & damping factor
+    const dampingFactor = this.sleepManager
+      ? this.sleepManager.update(currentDate, nowPerf)
+      : this.currentMode === 'sleep'
+        ? 0.0
+        : 1.0;
+    const isSleeping = this.sleepManager
+      ? this.sleepManager.getIsSleeping()
+      : this.currentMode === 'sleep';
+
     const activeManifest = this.themeManager?.getActiveManifest() || this.manifest;
     const periodSeconds = activeManifest?.pendulum.periodSeconds ?? 2.0;
     const maxAngleDeg = activeManifest?.pendulum.maxAngleDeg ?? 6.0;
@@ -162,6 +221,10 @@ export class ClockEngine {
 
     // 1. Calculate Hand Angles
     const angles = calculateHandAngles(currentDate, this.secondMode);
+    if (isSleeping) {
+      // In sleep (cat-safe) mode: update minute/hour hands only, lock second hand to minute hand
+      angles.second = angles.minute;
+    }
 
     // 2. Simple Harmonic Motion for Pendulum: θ(t) = θ_max * cos((2π / T) * t)
     const tSeconds = currentSimulatedMs / 1000;
@@ -169,13 +232,31 @@ export class ClockEngine {
     const phaseRad = ((omega * tSeconds) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
     const phaseNorm = phaseRad / (2 * Math.PI);
 
-    const pendulumAngleDeg = calculatePendulumAngle(tSeconds, periodSeconds, maxAngleDeg);
-    const pendulumAngleRad = (pendulumAngleDeg * Math.PI) / 180;
-    const angularVelocityNorm = -Math.sin(phaseRad);
-    const angularVelocityRad = -((maxAngleDeg * Math.PI) / 180) * omega * Math.sin(phaseRad);
+    let pendulumAngleDeg = calculatePendulumAngle(tSeconds, periodSeconds, maxAngleDeg);
+    let pendulumAngleRad = (pendulumAngleDeg * Math.PI) / 180;
+    let angularVelocityNorm = -Math.sin(phaseRad);
+    let angularVelocityRad = -((maxAngleDeg * Math.PI) / 180) * omega * Math.sin(phaseRad);
+
+    if (isSleeping || dampingFactor <= 0.001) {
+      pendulumAngleDeg = 0;
+      pendulumAngleRad = 0;
+      angularVelocityNorm = 0;
+      angularVelocityRad = 0;
+    } else if (dampingFactor < 0.999) {
+      pendulumAngleDeg *= dampingFactor;
+      pendulumAngleRad *= dampingFactor;
+      angularVelocityNorm *= dampingFactor;
+      angularVelocityRad *= dampingFactor;
+    }
 
     // 2b. Zero-Drift Sync: Trigger escapement tick directly from pendulum zero-crossing
-    if (this.lastPendulumAngleDeg !== null && this.timeMultiplier <= 3.0) {
+    // Escapement ticks are only active in 'active' mode
+    if (
+      this.currentMode === 'active' &&
+      !isSleeping &&
+      this.lastPendulumAngleDeg !== null &&
+      this.timeMultiplier <= 3.0
+    ) {
       if (this.lastPendulumAngleDeg < 0 && pendulumAngleDeg >= 0) {
         // Left-to-right zero-crossing -> 'tick'
         this.audioEngine?.onEscapementTick('tick');
@@ -187,10 +268,16 @@ export class ClockEngine {
     this.lastPendulumAngleDeg = pendulumAngleDeg;
 
     // 2c. Hourly and Quarter-Hourly Procedural Chimes
+    // Chimes are only active in 'active' mode
     const currentMinute = currentDate.getMinutes();
     const currentHour = currentDate.getHours();
     if (this.lastSimulatedMinute !== -1 && this.lastSimulatedMinute !== currentMinute) {
-      if (this.timeMultiplier <= 2.0 && this.audioEngine) {
+      if (
+        this.currentMode === 'active' &&
+        !isSleeping &&
+        this.timeMultiplier <= 2.0 &&
+        this.audioEngine
+      ) {
         if (currentMinute === 0) {
           this.audioEngine.onHour(currentHour);
         } else if (currentMinute === 15 || currentMinute === 30 || currentMinute === 45) {
@@ -231,10 +318,10 @@ export class ClockEngine {
         phaseRad,
         periodSeconds,
         maxAngleDeg,
-        dampingFactor: 1.0,
+        dampingFactor,
         dimmed,
         pivot,
-        timeSec: tSeconds
+        timeSec: isSleeping ? 0 : tSeconds
       };
 
       const telemetryData: TelemetryData = {
@@ -248,13 +335,17 @@ export class ClockEngine {
         pendulumPeriodSec: periodSeconds,
         secondMode: this.secondMode,
         timeMultiplier: this.timeMultiplier,
-        isSleeping: false,
+        isSleeping,
+        mode: this.currentMode,
         showDebugGrid: this.showDebugGrid,
         activeNotificationsCount,
         currentDate
       };
 
-      activeTheme.renderPendulum(ctx, physicsData);
+      // In sleep mode: completely hide pendulum so there is no motion to attract pets
+      if (!isSleeping) {
+        activeTheme.renderPendulum(ctx, physicsData);
+      }
       activeTheme.renderDial(ctx, timeData);
       activeTheme.renderOverlay(ctx, telemetryData);
     } else if (this.elements) {
@@ -262,7 +353,12 @@ export class ClockEngine {
       this.elements.handHour.style.transform = `rotate(${angles.hour.toFixed(3)}deg)`;
       this.elements.handMinute.style.transform = `rotate(${angles.minute.toFixed(3)}deg)`;
       this.elements.handSecond.style.transform = `rotate(${angles.second.toFixed(3)}deg)`;
-      this.elements.pendulum.style.transform = `rotate(${pendulumAngleDeg.toFixed(3)}deg)`;
+      if (!isSleeping) {
+        this.elements.pendulum.style.display = '';
+        this.elements.pendulum.style.transform = `rotate(${pendulumAngleDeg.toFixed(3)}deg)`;
+      } else {
+        this.elements.pendulum.style.display = 'none';
+      }
     }
 
     // Notify HUD/tick listeners

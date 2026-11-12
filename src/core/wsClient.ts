@@ -3,7 +3,8 @@ import { NotificationManager } from './notificationManager';
 import { ThemeLoader } from './themeLoader';
 import { ThemeManager } from '../themes/themeManager';
 import { ClockAudioEngine } from './audioEngine';
-import { HandMode, NotificationPayload } from '../types/theme';
+import { SleepManager, TimeSchedule } from './sleepManager';
+import { HandMode, NotificationPayload, ClockMode } from '../types/theme';
 
 export type WSStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
 
@@ -12,9 +13,29 @@ export interface WSClientOptions {
   clockEngine: ClockEngine;
   notificationManager: NotificationManager;
   audioEngine?: ClockAudioEngine;
+  sleepManager?: SleepManager;
   themeManager?: ThemeManager;
   themeLoader?: ThemeLoader;
   onStatusChange?: (status: WSStatus, url: string) => void;
+}
+
+export interface SetModeActionMessage {
+  action: 'set_mode';
+  mode: ClockMode;
+}
+
+export interface SetScheduleActionMessage {
+  action: 'set_schedule';
+  schedule?: Partial<TimeSchedule>;
+  nightStart?: string;
+  sleepStart?: string;
+  wakeTime?: string;
+  silentStart?: string;
+  enabled?: boolean;
+}
+
+export interface WakeActionMessage {
+  action: 'wake';
 }
 
 export interface BackendInitMessage {
@@ -74,7 +95,10 @@ export type BackendIncomingMessage =
   | BackendNotifyMessage
   | BackendConfigMessage
   | SetThemeActionMessage
-  | SetAudioActionMessage;
+  | SetAudioActionMessage
+  | SetModeActionMessage
+  | SetScheduleActionMessage
+  | WakeActionMessage;
 
 export class ClockWebSocketClient {
   public static readonly DEFAULT_WS_URL = 'ws://192.168.0.69:8088/ws';
@@ -84,6 +108,7 @@ export class ClockWebSocketClient {
   private clockEngine: ClockEngine;
   private notificationManager: NotificationManager;
   private audioEngine?: ClockAudioEngine;
+  private sleepManager?: SleepManager;
   private themeManager?: ThemeManager;
   private themeLoader?: ThemeLoader;
   private onStatusChangeCallback?: (status: WSStatus, url: string) => void;
@@ -101,6 +126,10 @@ export class ClockWebSocketClient {
     this.themeManager = options.themeManager;
     this.themeLoader = options.themeLoader;
     this.onStatusChangeCallback = options.onStatusChange;
+
+    if (options.sleepManager) {
+      this.setSleepManager(options.sleepManager);
+    }
 
     // Priority: Explicit option -> URL query param ?ws= -> Default
     const queryWs =
@@ -188,6 +217,43 @@ export class ClockWebSocketClient {
     return this.audioEngine;
   }
 
+  public setSleepManager(sleepManager: SleepManager): void {
+    this.sleepManager = sleepManager;
+    sleepManager.onModeChange(() => {
+      this.broadcastModeState();
+    });
+    sleepManager.onScheduleChange(() => {
+      this.broadcastModeState();
+    });
+  }
+
+  public getSleepManager(): SleepManager | undefined {
+    return this.sleepManager;
+  }
+
+  /**
+   * Broadcasts the current mode, schedule, and presence state back over WebSocket
+   * so Home Assistant and backend daemon stay synchronized.
+   */
+  public broadcastModeState(): void {
+    if (!this.isConnected() || !this.sleepManager) return;
+    const state = this.sleepManager.getState();
+    const payload = {
+      type: 'mode_changed',
+      mode: state.mode,
+      isSleeping: state.isSleeping,
+      sleepOverride: state.isManualOverride,
+      manualOverrideMode: state.manualOverrideMode,
+      schedule: state.schedule,
+      nightDimLevel: state.nightDimLevel,
+      sleepOpacity: state.sleepOpacity,
+      dampingFactor: state.dampingFactor,
+      timestamp: new Date().toISOString()
+    };
+    console.log('[Clock WS] Broadcasting state change to backend:', payload);
+    this.send(payload);
+  }
+
   /**
    * Send JSON message to backend daemon if needed
    */
@@ -249,6 +315,50 @@ export class ClockWebSocketClient {
       return;
     }
 
+    // 3. Handle `{ "action": "set_mode", "mode": "active" | "silent" | "night" | "sleep" }`
+    if (
+      ('action' in msg && msg.action === 'set_mode') ||
+      ('type' in msg && msg.type === 'set_mode')
+    ) {
+      const mode = (msg as { mode?: ClockMode }).mode;
+      if (mode && ['active', 'silent', 'night', 'sleep'].includes(mode)) {
+        console.log(`[Clock WS] Setting mode to '${mode}' via remote command.`);
+        this.sleepManager?.setMode(mode, true);
+        this.broadcastModeState();
+      }
+      return;
+    }
+
+    // 4. Handle `{ "action": "wake" }`
+    if (
+      ('action' in msg && msg.action === 'wake') ||
+      ('type' in msg && msg.type === 'wake')
+    ) {
+      console.log('[Clock WS] Remote wake command received.');
+      this.sleepManager?.wake('remote');
+      this.broadcastModeState();
+      return;
+    }
+
+    // 5. Handle `{ "action": "set_schedule", ... }`
+    if (
+      ('action' in msg && msg.action === 'set_schedule') ||
+      ('type' in msg && msg.type === 'set_schedule')
+    ) {
+      const schedMsg = msg as SetScheduleActionMessage;
+      const schedPayload = schedMsg.schedule || {
+        nightStart: schedMsg.nightStart,
+        sleepStart: schedMsg.sleepStart,
+        wakeTime: schedMsg.wakeTime,
+        silentStart: schedMsg.silentStart,
+        enabled: schedMsg.enabled
+      };
+      console.log('[Clock WS] Setting schedule via remote command:', schedPayload);
+      this.sleepManager?.setSchedule(schedPayload);
+      this.broadcastModeState();
+      return;
+    }
+
     const typedMsg = msg as BackendIncomingMessage;
     if (!('type' in typedMsg)) return;
 
@@ -271,6 +381,13 @@ export class ClockWebSocketClient {
             }
             if (typeof typedMsg.config.chimes === 'boolean') {
               this.audioEngine.setChimesEnabled(typedMsg.config.chimes);
+            }
+          }
+          if (this.sleepManager && typeof typedMsg.config.sleepOverride === 'boolean') {
+            if (typedMsg.config.sleepOverride) {
+              this.sleepManager.setMode('sleep', true);
+            } else {
+              this.sleepManager.wake('remote');
             }
           }
           const initTheme = typedMsg.config.theme_id || typedMsg.config.theme;
@@ -319,6 +436,13 @@ export class ClockWebSocketClient {
             this.audioEngine.setChimesEnabled(typedMsg.chimes);
           }
         }
+        if (this.sleepManager && typeof typedMsg.sleepOverride === 'boolean') {
+          if (typedMsg.sleepOverride) {
+            this.sleepManager.setMode('sleep', true);
+          } else {
+            this.sleepManager.wake('remote');
+          }
+        }
         const cfgTheme = typedMsg.theme_id || typedMsg.theme;
         if (cfgTheme) {
           this.applyThemeIfChanged(cfgTheme, true);
@@ -337,6 +461,9 @@ export class ClockWebSocketClient {
     this.reconnectAttempts = 0;
     this.setStatus('connected');
     console.log(`[Clock WS] Successfully connected to ${this.url}`);
+
+    // Broadcast current mode & schedule state immediately on link establishment
+    this.broadcastModeState();
 
     if (!this.initialConnectedNotified) {
       this.initialConnectedNotified = true;

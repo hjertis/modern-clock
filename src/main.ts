@@ -6,7 +6,8 @@ import { DebugOverlay } from './core/debugOverlay';
 import { ClockWebSocketClient } from './core/wsClient';
 import { ThemeManager } from './themes/themeManager';
 import { ClockAudioEngine } from './core/audioEngine';
-import { NotificationPayload, Theme } from './types/theme';
+import { SleepManager, TimeSchedule } from './core/sleepManager';
+import { NotificationPayload, Theme, ClockMode } from './types/theme';
 
 export interface ClockPublicAPI {
   notify: (payload: NotificationPayload) => string;
@@ -16,12 +17,18 @@ export interface ClockPublicAPI {
   toggleMode: () => 'tick' | 'sweep';
   setTimeMultiplier: (multiplier: number) => void;
   setTheme: (themeId: string) => Promise<Theme>;
+  setClockMode: (mode: ClockMode) => void;
+  getClockMode: () => ClockMode;
+  wake: () => void;
+  setSchedule: (schedule: Partial<TimeSchedule>) => void;
+  getSchedule: () => TimeSchedule;
   themeManager: ThemeManager;
   engine: ClockEngine;
   loader: ThemeLoader;
   notifications: NotificationManager;
   ws: ClockWebSocketClient;
   audio: ClockAudioEngine;
+  sleep: SleepManager;
 }
 
 declare global {
@@ -89,9 +96,32 @@ async function bootstrap() {
   // 3. Initialize Core Managers & Modular Theme Architecture
   const themeLoader = new ThemeLoader(elements);
   const audioEngine = new ClockAudioEngine();
+  const sleepManager = new SleepManager(stage, {
+    schedule: {
+      enabled: true,
+      wakeTime: '06:30',
+      nightStart: '22:00',
+      sleepStart: '23:30'
+    },
+    nightDimLevel: 0.20,
+    sleepOpacity: 0.05
+  });
   const themeManager = new ThemeManager(canvas, stage, notificationZone, audioEngine);
-  const clockEngine = new ClockEngine(elements, { themeManager, audioEngine });
+  const clockEngine = new ClockEngine(elements, { themeManager, audioEngine, sleepManager });
   const notificationManager = new NotificationManager(notificationZone, pendulum, audioEngine);
+
+  // Sync mode changes across all subsystems
+  sleepManager.onModeChange((mode, prevMode) => {
+    console.log(`[Clock] Mode changed: ${prevMode} -> ${mode}`);
+    clockEngine.setMode(mode);
+    audioEngine.setClockMode(mode);
+    notificationManager.setMode(mode);
+    themeManager.dispatchEvent({
+      type: 'mode_change',
+      payload: { mode, prevMode, isSleeping: mode === 'sleep' },
+      timestamp: Date.now()
+    });
+  });
 
   clockEngine.setActiveNotificationsProvider(() => notificationManager.getActiveCount());
 
@@ -138,6 +168,7 @@ async function bootstrap() {
       clockEngine,
       notificationManager,
       audioEngine,
+      sleepManager,
       themeManager,
       themeLoader,
       onStatusChange: (status, url) => {
@@ -154,7 +185,8 @@ async function bootstrap() {
       notificationManager,
       wsClient,
       themeManager,
-      audioEngine
+      audioEngine,
+      sleepManager
     );
 
     // Pill button toggles HUD
@@ -191,12 +223,18 @@ async function bootstrap() {
       toggleMode: () => clockEngine.toggleSecondMode(),
       setTimeMultiplier: (multiplier: number) => clockEngine.setTimeMultiplier(multiplier),
       setTheme: (themeId: string) => themeManager.setTheme(themeId),
+      setClockMode: (mode: ClockMode) => sleepManager.setMode(mode, true),
+      getClockMode: () => sleepManager.getMode(),
+      wake: () => sleepManager.wake(),
+      setSchedule: (schedule: Partial<TimeSchedule>) => sleepManager.setSchedule(schedule),
+      getSchedule: () => sleepManager.getSchedule(),
       themeManager,
       engine: clockEngine,
       loader: themeLoader,
       notifications: notificationManager,
       ws: wsClient,
-      audio: audioEngine
+      audio: audioEngine,
+      sleep: sleepManager
     };
 
     window.clock = publicAPI;

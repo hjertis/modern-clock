@@ -1,4 +1,6 @@
 export type HandMode = 'tick' | 'sweep';
+export type ClockMode = 'active' | 'silent' | 'night' | 'sleep';
+export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent' | 'critical';
 
 export interface Point2D {
   x: number;
@@ -59,7 +61,7 @@ export interface NotificationPayload {
   title: string;
   message: string;
   timeoutMs?: number;
-  priority?: 'normal' | 'urgent';
+  priority?: NotificationPriority;
   category?: 'alert' | 'info' | 'doorbell' | 'calendar' | 'weather';
   timestamp?: Date;
 }
