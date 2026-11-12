@@ -28,6 +28,12 @@
   box-shadow: 0 20px 80px rgba(0, 0, 0, 0.95), 0 0 1px 1px rgba(255, 255, 255, 0.05);
 }
 
+#clock-stage[data-theme="pcb_2049_emerald"] {
+  background: #091e15;
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.95), 0 0 1px 1px rgba(244, 196, 98, 0.18);
+}
+
+
 /* Layered DOM Hierarchy */
 .clock-layer {
   position: absolute;

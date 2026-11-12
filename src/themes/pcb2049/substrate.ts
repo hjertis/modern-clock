@@ -1,32 +1,48 @@
 import { Point2D } from '../../types/theme';
 import {
   PCB_COLORS,
+  PCB_EMERALD_COLORS,
   PCB_GEOMETRY,
   LEFT_LATERAL_BUS_PATHS,
-  RIGHT_LATERAL_BUS_PATHS
+  RIGHT_LATERAL_BUS_PATHS,
+  EMERALD_LOWER_LEFT_BUS_PATHS,
+  EMERALD_LOWER_RIGHT_BUS_PATHS,
+  PcbThemeVariant
 } from './constants';
 
 /**
  * Renders the static multi-layer FR-4 motherboard substrate for PCB-2049
  * onto an offscreen 1080x1920 canvas during theme mount().
  */
-export function createSubstrateCanvas(): HTMLCanvasElement {
+export function createSubstrateCanvas(variant: PcbThemeVariant = 'standard'): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = PCB_GEOMETRY.WIDTH;
   canvas.height = PCB_GEOMETRY.HEIGHT;
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas;
 
+  if (variant === 'emerald') {
+    drawEmeraldFr4Substrate(ctx);
+    drawEmeraldCopperPourRelief(ctx);
+    drawLateralTraceBuses(ctx, 'emerald');
+    drawEmeraldMidSectionGridAndBridge(ctx);
+    drawEmeraldLowerWaferBusesAndEdgeFingers(ctx);
+    drawCornerMountingHolesAndFiducials(ctx);
+    drawBoardSilkscreenLegends(ctx, 'emerald');
+    return canvas;
+  }
+
   drawBaseFr4Substrate(ctx);
   drawCopperGroundPours(ctx);
-  drawLateralTraceBuses(ctx);
+  drawLateralTraceBuses(ctx, 'standard');
   drawChamberArchitecture(ctx);
   drawLowerWaferBayAndBeatScale(ctx);
   drawCornerMountingHolesAndFiducials(ctx);
-  drawBoardSilkscreenLegends(ctx);
+  drawBoardSilkscreenLegends(ctx, 'standard');
 
   return canvas;
 }
+
 
 function drawBaseFr4Substrate(ctx: CanvasRenderingContext2D): void {
   const { WIDTH, HEIGHT } = PCB_GEOMETRY;
@@ -155,7 +171,10 @@ function drawCopperGroundPours(ctx: CanvasRenderingContext2D): void {
   ctx.restore();
 }
 
-function drawLateralTraceBuses(ctx: CanvasRenderingContext2D): void {
+function drawLateralTraceBuses(
+  ctx: CanvasRenderingContext2D,
+  variant: PcbThemeVariant = 'standard'
+): void {
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -171,7 +190,7 @@ function drawLateralTraceBuses(ctx: CanvasRenderingContext2D): void {
   allBuses.forEach((path, idx) => {
     const isGoldTrace = idx % 2 === 0;
     const color = isGoldTrace ? PCB_COLORS.ENIG_GOLD : PCB_COLORS.AGED_COPPER;
-    const alpha = isGoldTrace ? 0.65 : 0.55;
+    const alpha = variant === 'emerald' ? (isGoldTrace ? 0.78 : 0.68) : isGoldTrace ? 0.65 : 0.55;
     ctx.save();
     ctx.globalAlpha = alpha;
     strokePolyline(ctx, path, color, isGoldTrace ? 2.6 : 2.2);
@@ -195,11 +214,15 @@ function drawLateralTraceBuses(ctx: CanvasRenderingContext2D): void {
     [{ x: 1000, y: 260 }, { x: 956, y: 304 }, { x: 956, y: 404 }, { x: 924, y: 436 }],
     // Mid-board horizontal bus feeds
     [{ x: 140, y: 990 }, { x: 175, y: 955 }, { x: 350, y: 955 }, { x: 385, y: 990 }, { x: 465, y: 990 }],
-    [{ x: 940, y: 990 }, { x: 905, y: 955 }, { x: 730, y: 955 }, { x: 695, y: 990 }, { x: 615, y: 990 }],
-    // Bottom bus trunk
-    [{ x: 260, y: 1850 }, { x: 290, y: 1820 }, { x: 460, y: 1820 }, { x: 480, y: 1840 }],
-    [{ x: 820, y: 1850 }, { x: 790, y: 1820 }, { x: 620, y: 1820 }, { x: 600, y: 1840 }]
+    [{ x: 940, y: 990 }, { x: 905, y: 955 }, { x: 730, y: 955 }, { x: 695, y: 990 }, { x: 615, y: 990 }]
   ];
+
+  if (variant === 'standard') {
+    secondaryTraces.push(
+      [{ x: 260, y: 1850 }, { x: 290, y: 1820 }, { x: 460, y: 1820 }, { x: 480, y: 1840 }],
+      [{ x: 820, y: 1850 }, { x: 790, y: 1820 }, { x: 620, y: 1820 }, { x: 600, y: 1840 }]
+    );
+  }
 
   for (const path of secondaryTraces) {
     strokePolyline(ctx, path, PCB_COLORS.AGED_COPPER, 2.0);
@@ -209,6 +232,7 @@ function drawLateralTraceBuses(ctx: CanvasRenderingContext2D): void {
 
   ctx.restore();
 }
+
 
 function drawChamberArchitecture(ctx: CanvasRenderingContext2D): void {
   const { PENDULUM_PIVOT } = PCB_GEOMETRY;
@@ -506,7 +530,10 @@ function drawCornerMountingHolesAndFiducials(ctx: CanvasRenderingContext2D): voi
   }
 }
 
-function drawBoardSilkscreenLegends(ctx: CanvasRenderingContext2D): void {
+function drawBoardSilkscreenLegends(
+  ctx: CanvasRenderingContext2D,
+  variant: PcbThemeVariant = 'standard'
+): void {
   ctx.save();
   ctx.font = 'bold 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
   ctx.fillStyle = PCB_COLORS.SILKSCREEN_BONE;
@@ -514,10 +541,17 @@ function drawBoardSilkscreenLegends(ctx: CanvasRenderingContext2D): void {
   // Top header silkscreen bar
   ctx.textAlign = 'center';
   ctx.fillText(
-    'PCB-2049 // INDUSTRIAL SILICON CHRONOGRAPH SUBSTRATE // IPC-6012 CLASS 3',
+    variant === 'emerald'
+      ? 'PCB-2049 // SILICON MASTER // REV B // EMERALD LPI SOLDERMASK'
+      : 'PCB-2049 // INDUSTRIAL SILICON CHRONOGRAPH SUBSTRATE // IPC-6012 CLASS 3',
     540,
     46
   );
+
+  if (variant === 'emerald') {
+    ctx.restore();
+    return;
+  }
 
   // Layer Stackup Coupon on bottom left
   ctx.textAlign = 'left';
@@ -556,6 +590,433 @@ function drawBoardSilkscreenLegends(ctx: CanvasRenderingContext2D): void {
 
   ctx.restore();
 }
+
+function drawEmeraldFr4Substrate(ctx: CanvasRenderingContext2D): void {
+  const { WIDTH, HEIGHT } = PCB_GEOMETRY;
+
+  // 1. Dark anodized outer frame / bezel rails on left and right edges
+  ctx.fillStyle = PCB_EMERALD_COLORS.MASK_OUTER_CHASSIS;
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  // 2. Stepped Emerald-Green FR-4 Motherboard Card with PCIe bottom tongue
+  const boardGrad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+  boardGrad.addColorStop(0, PCB_EMERALD_COLORS.MASK_DEEP);
+  boardGrad.addColorStop(0.35, PCB_EMERALD_COLORS.MASK_RICH);
+  boardGrad.addColorStop(0.7, PCB_EMERALD_COLORS.MASK_DEEP);
+  boardGrad.addColorStop(1, PCB_EMERALD_COLORS.MASK_RICH);
+
+  ctx.save();
+  ctx.beginPath();
+  const m = 38;
+  const c = 36;
+  const shoulderY = 1834;
+  const tongueLeft = 188;
+  const tongueRight = WIDTH - 188;
+
+  ctx.moveTo(m + c, 18);
+  ctx.lineTo(WIDTH - m - c, 18);
+  ctx.lineTo(WIDTH - m, 18 + c);
+  ctx.lineTo(WIDTH - m, shoulderY - 28);
+  ctx.lineTo(WIDTH - m - 28, shoulderY);
+  ctx.lineTo(tongueRight + 16, shoulderY);
+  ctx.lineTo(tongueRight, shoulderY + 16);
+  ctx.lineTo(tongueRight, HEIGHT);
+  ctx.lineTo(tongueLeft, HEIGHT);
+  ctx.lineTo(tongueLeft, shoulderY + 16);
+  ctx.lineTo(tongueLeft - 16, shoulderY);
+  ctx.lineTo(m + 28, shoulderY);
+  ctx.lineTo(m, shoulderY - 28);
+  ctx.lineTo(m, 18 + c);
+  ctx.closePath();
+
+  ctx.fillStyle = boardGrad;
+  ctx.fill();
+
+  // Subtle fiberglass FR-4 micro-weave inside the emerald board
+  ctx.save();
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(120, 255, 190, 0.022)';
+  ctx.lineWidth = 1;
+  const step = 12;
+  ctx.beginPath();
+  for (let x = 0; x <= WIDTH; x += step) {
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, HEIGHT);
+  }
+  for (let y = 0; y <= HEIGHT; y += step) {
+    ctx.moveTo(0, y);
+    ctx.lineTo(WIDTH, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // Board perimeter aged copper keep-out border
+  ctx.strokeStyle = PCB_COLORS.AGED_COPPER;
+  ctx.lineWidth = 2.6;
+  ctx.stroke();
+
+  // Edge plated half-moon castellations along left & right edges
+  for (let y = 160; y <= 1760; y += 36) {
+    if (y > 920 && y < 1060) continue;
+    drawEdgeCastellation(ctx, m, y, 'left');
+    drawEdgeCastellation(ctx, WIDTH - m, y, 'right');
+  }
+  ctx.restore();
+}
+
+function drawEmeraldCopperPourRelief(ctx: CanvasRenderingContext2D): void {
+  ctx.save();
+
+  // Translucent emerald-green copper pour relief planes (classic green LPI soldermask over 1oz copper planes)
+  const reliefPlanes = [
+    { x: 66, y: 66, w: 220, h: 220 },
+    { x: 794, y: 66, w: 220, h: 220 },
+    { x: 86, y: 740, w: 260, h: 210 },
+    { x: 734, y: 740, w: 260, h: 210 },
+    { x: 86, y: 1030, w: 340, h: 280 },
+    { x: 654, y: 1030, w: 340, h: 280 },
+    { x: 180, y: 1320, w: 720, h: 490 }
+  ];
+
+  for (const plane of reliefPlanes) {
+    ctx.save();
+    // Raised copper plane under green soldermask
+    ctx.fillStyle = 'rgba(20, 68, 45, 0.42)';
+    ctx.strokeStyle = 'rgba(200, 150, 62, 0.24)';
+    ctx.lineWidth = 1.2;
+    ctx.fillRect(plane.x, plane.y, plane.w, plane.h);
+    ctx.strokeRect(plane.x, plane.y, plane.w, plane.h);
+
+    // 45-degree cross-hatched copper ground relief pattern visible through emerald mask
+    ctx.beginPath();
+    ctx.rect(plane.x, plane.y, plane.w, plane.h);
+    ctx.clip();
+
+    ctx.strokeStyle = 'rgba(200, 150, 62, 0.085)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = -plane.h; i < plane.w + plane.h; i += 14) {
+      ctx.moveTo(plane.x + i, plane.y);
+      ctx.lineTo(plane.x + i - plane.h, plane.y + plane.h);
+      ctx.moveTo(plane.x + i, plane.y + plane.h);
+      ctx.lineTo(plane.x + i - plane.h, plane.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+function drawEmeraldMidSectionGridAndBridge(ctx: CanvasRenderingContext2D): void {
+  const { PENDULUM_PIVOT } = PCB_GEOMETRY;
+  ctx.save();
+
+  // 1. Mid-board technical schematic grid frame matching the reference image (y = 850..1280)
+  const gridLeft = 114;
+  const gridRight = 966;
+  const gridTop = 860;
+  const gridBottom = 1265;
+
+  // Recessed dark-emerald technical bay
+  ctx.fillStyle = 'rgba(6, 22, 15, 0.72)';
+  ctx.strokeStyle = 'rgba(200, 150, 62, 0.42)';
+  ctx.lineWidth = 1.4;
+  ctx.fillRect(gridLeft, gridTop, gridRight - gridLeft, gridBottom - gridTop);
+  ctx.strokeRect(gridLeft, gridTop, gridRight - gridLeft, gridBottom - gridTop);
+
+  // Fine orthogonal coordinate grid lines inside mid-section
+  ctx.strokeStyle = 'rgba(244, 196, 98, 0.11)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = gridLeft + 60; x < gridRight; x += 60) {
+    ctx.moveTo(x, gridTop);
+    ctx.lineTo(x, gridBottom);
+  }
+  for (let y = gridTop + 50; y < gridBottom; y += 50) {
+    ctx.moveTo(gridLeft, y);
+    ctx.lineTo(gridRight, y);
+  }
+  ctx.stroke();
+
+  // Reference image silkscreen callouts on upper-left of mid-board (above U_NET panel)
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 21px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  ctx.fillStyle = PCB_COLORS.SILKSCREEN_BONE;
+  ctx.fillText('PCB-2049 // INDUSTRIAL SILICON', 124, 922);
+
+  ctx.font = 'bold 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  ctx.fillStyle = 'rgba(232, 226, 208, 0.75)';
+  ctx.fillText('DAEMON: 192.168.0.69:8088/ws (CONNECTED)', 124, 948);
+  ctx.fillStyle = PCB_COLORS.SILKSCREEN_AMBER;
+  ctx.fillText('STATUS: ACTIVE // PENDULUM SYNC NOMINAL', 124, 968);
+
+  // Coordinate grid numeric markers from reference image (185, 75, 45, 150, 20)
+  ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  ctx.fillStyle = 'rgba(232, 226, 208, 0.55)';
+  ctx.fillText('185', 124, 1185);
+  ctx.fillText('75', 252, 1185);
+  ctx.fillText('45', 804, 1185);
+  ctx.fillText('150', 124, 1254);
+  ctx.fillText('20', 936, 1254);
+
+  // Right-side status bar silkscreen frames above/behind U_OSC
+  for (let i = 0; i < 3; i++) {
+    const bx = 824;
+    const by = 924 + i * 34;
+    ctx.strokeStyle = 'rgba(200, 150, 62, 0.45)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bx, by, 130, 26);
+    ctx.fillStyle = 'rgba(244, 196, 98, 0.25)';
+    ctx.fillRect(bx + 8, by + 16, 86 - i * 18, 4);
+    ctx.font = 'bold 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+    ctx.fillStyle = PCB_COLORS.SILKSCREEN_BONE;
+    ctx.fillText('⚙ STATUS', bx + 8, by + 11);
+  }
+
+  // ZIF-16 Mezzanine FPC Connector Shroud at Pendulum Pivot (540, 990)
+  const zifW = 148;
+  const zifH = 34;
+  const zifX = PENDULUM_PIVOT.x - zifW / 2;
+  const zifY = PENDULUM_PIVOT.y - zifH / 2;
+
+  ctx.fillStyle = '#07140e';
+  ctx.strokeStyle = PCB_COLORS.ENIG_GOLD;
+  ctx.lineWidth = 1.8;
+  ctx.fillRect(zifX, zifY, zifW, zifH);
+  ctx.strokeRect(zifX, zifY, zifW, zifH);
+
+  for (let i = 0; i < 16; i++) {
+    const px = zifX + 14 + i * 8;
+    ctx.fillStyle = PCB_COLORS.ENIG_GOLD;
+    ctx.fillRect(px - 2, zifY - 5, 4, 6);
+    ctx.fillRect(px - 2, zifY + zifH - 1, 4, 6);
+  }
+
+  ctx.restore();
+}
+
+function drawEmeraldLowerWaferBusesAndEdgeFingers(ctx: CanvasRenderingContext2D): void {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // 1. Recessed emerald lower chamber bay around wafer & buses
+  ctx.fillStyle = 'rgba(5, 18, 12, 0.68)';
+  ctx.strokeStyle = PCB_COLORS.AGED_COPPER;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(96, 1330);
+  ctx.lineTo(132, 1294);
+  ctx.lineTo(948, 1294);
+  ctx.lineTo(984, 1330);
+  ctx.lineTo(984, 1796);
+  ctx.lineTo(948, 1832);
+  ctx.lineTo(132, 1832);
+  ctx.lineTo(96, 1796);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 2. Tight, multi-lane 45° parallel copper trace buses hugging the lower wafer bezel
+  // and terminating into the bottom PCIe gold edge-connector fingers
+  const lowerBuses = [...EMERALD_LOWER_LEFT_BUS_PATHS, ...EMERALD_LOWER_RIGHT_BUS_PATHS];
+
+  // Dark soldermask trench behind trace bundles
+  for (const path of lowerBuses) {
+    strokePolyline(ctx, path, 'rgba(2, 8, 5, 0.85)', 6.5);
+  }
+
+  // Draw each parallel copper/gold trace lane with crisp 45-degree miter corners
+  lowerBuses.forEach((path, idx) => {
+    const lane = idx % 8;
+    const isBrightGold = lane === 0 || lane === 3 || lane === 4 || lane === 7;
+    const color = isBrightGold ? PCB_COLORS.ENIG_GOLD : PCB_COLORS.AGED_COPPER;
+    const width = isBrightGold ? 3.2 : 2.6;
+
+    strokePolyline(ctx, path, color, width);
+
+    // Subtle specular highlight along center of trace
+    if (isBrightGold) {
+      strokePolyline(ctx, path, 'rgba(255, 236, 179, 0.45)', 1.1);
+    }
+
+    // Vias at wafer-side origin and selected bends
+    drawAnnularVia(ctx, path[0].x, path[0].y, 4.2, 1.8);
+    drawAnnularVia(ctx, path[2].x, path[2].y, 3.8, 1.6);
+  });
+
+  // Additional inner companion 45-degree traces hugging directly under the lower wafer arc
+  const innerWaferHugLeft: Point2D[][] = [
+    [
+      { x: 350, y: 1590 },
+      { x: 260, y: 1590 },
+      { x: 224, y: 1626 },
+      { x: 224, y: 1696 },
+      { x: 280, y: 1752 },
+      { x: 454, y: 1752 },
+      { x: 472, y: 1770 },
+      { x: 472, y: 1852 }
+    ],
+    [
+      { x: 368, y: 1618 },
+      { x: 274, y: 1618 },
+      { x: 244, y: 1648 },
+      { x: 244, y: 1688 },
+      { x: 292, y: 1736 },
+      { x: 478, y: 1736 },
+      { x: 496, y: 1754 },
+      { x: 496, y: 1852 }
+    ],
+    [
+      { x: 410, y: 1676 },
+      { x: 332, y: 1676 },
+      { x: 368, y: 1712 },
+      { x: 504, y: 1712 },
+      { x: 520, y: 1728 },
+      { x: 520, y: 1852 }
+    ]
+  ];
+  const innerWaferHugRight: Point2D[][] = innerWaferHugLeft.map((p) =>
+    p.map((pt) => ({ x: 1080 - pt.x, y: pt.y }))
+  );
+
+  for (const path of [...innerWaferHugLeft, ...innerWaferHugRight]) {
+    strokePolyline(ctx, path, 'rgba(2, 8, 5, 0.85)', 6.0);
+    strokePolyline(ctx, path, PCB_COLORS.ENIG_GOLD, 3.0);
+    drawAnnularVia(ctx, path[0].x, path[0].y, 4.5, 1.9);
+  }
+
+  // 3. Glowing Cyan & Red SMD Indicator LEDs + Silkscreen Callouts flanking the lower wafer
+  const drawGlowingLed = (x: number, y: number, color: string, r = 4.2) => {
+    ctx.save();
+    const g = ctx.createRadialGradient(x, y, 0.5, x, y, r * 4.5);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.25, color);
+    g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 4.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.65, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+
+  // Dual cyan optical lock LEDs on left and right of wafer bezel (y ~ 1515, 1532)
+  drawGlowingLed(236, 1514, PCB_EMERALD_COLORS.CYAN_LED, 4.0);
+  drawGlowingLed(236, 1532, PCB_EMERALD_COLORS.CYAN_LED, 4.0);
+  drawGlowingLed(1080 - 236, 1514, PCB_EMERALD_COLORS.CYAN_LED, 4.0);
+  drawGlowingLed(1080 - 236, 1532, PCB_EMERALD_COLORS.CYAN_LED, 4.0);
+
+  // Red fault/sync LED pairs + FD01..FD04 / RD01..RD04 silkscreen legends (y ~ 1600..1654)
+  drawGlowingLed(278, 1626, PCB_EMERALD_COLORS.RED_LED, 3.8);
+  drawGlowingLed(278, 1644, PCB_EMERALD_COLORS.RED_LED, 3.8);
+  drawGlowingLed(1080 - 278, 1626, PCB_EMERALD_COLORS.RED_LED, 3.8);
+  drawGlowingLed(1080 - 278, 1644, PCB_EMERALD_COLORS.RED_LED, 3.8);
+
+  // Warm amber bus activity LEDs along outer trace lanes
+  drawGlowingLed(150, 1495, PCB_COLORS.ENIG_BRIGHT, 3.6);
+  drawGlowingLed(930, 1545, PCB_COLORS.ENIG_BRIGHT, 3.6);
+  drawGlowingLed(290, 1684, PCB_COLORS.ENIG_BRIGHT, 3.6);
+  drawGlowingLed(790, 1684, PCB_COLORS.ENIG_BRIGHT, 3.6);
+
+  ctx.font = 'bold 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  ctx.fillStyle = 'rgba(232, 226, 208, 0.75)';
+  ctx.textAlign = 'left';
+  ['FD01', 'FD02', 'FD03', 'FD04'].forEach((lbl, i) => {
+    ctx.fillText(lbl, 236, 1602 + i * 15);
+  });
+  ctx.textAlign = 'right';
+  ['RD01', 'RD02', 'RD03', 'RD04'].forEach((lbl, i) => {
+    ctx.fillText(lbl, 1080 - 236, 1602 + i * 15);
+  });
+
+  // Bottom SMD resistor array triplets near lower corners (x ~ 136..172 and 908..944, y ~ 1796)
+  for (const baseX of [136, 908]) {
+    for (let i = 0; i < 3; i++) {
+      const rx = baseX + i * 16;
+      const ry = 1794;
+      ctx.fillStyle = PCB_COLORS.ENIG_GOLD;
+      ctx.fillRect(rx, ry, 6, 4);
+      ctx.fillRect(rx, ry + 10, 6, 4);
+      ctx.fillStyle = '#141c18';
+      ctx.fillRect(rx, ry + 4, 6, 6);
+    }
+  }
+
+  // 4. Vertical PCIe-Style ENIG Gold Edge-Connector Fingers along Bottom Edge of Viewport
+  const fingerTopY = 1850;
+  const fingerHeight = 68;
+  const fingerWidth = 14;
+  const fingerPitch = 24;
+
+  // Emerald soldermask edge-connector substrate bar
+  ctx.fillStyle = PCB_EMERALD_COLORS.MASK_RICH;
+  ctx.fillRect(194, 1840, 692, 80);
+  ctx.strokeStyle = 'rgba(200, 150, 62, 0.45)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(194, 1840, 692, 80);
+
+  // Draw left bank (12 gold fingers) and right bank (12 gold fingers) with PCIe keying gap in center
+  const fingerXPositions: number[] = [];
+  for (let i = 0; i < 12; i++) {
+    fingerXPositions.push(228 + i * fingerPitch);
+  }
+  for (let i = 0; i < 12; i++) {
+    fingerXPositions.push(588 + i * fingerPitch);
+  }
+
+  for (const fx of fingerXPositions) {
+    const left = fx - fingerWidth / 2;
+
+    // Short copper neck trace entering top of gold finger
+    ctx.fillStyle = PCB_COLORS.AGED_COPPER;
+    ctx.fillRect(fx - 2.5, fingerTopY - 12, 5, 14);
+
+    // Metallic ENIG gold finger gradient with 3D beveled sheen
+    const fGrad = ctx.createLinearGradient(left, fingerTopY, left + fingerWidth, fingerTopY);
+    fGrad.addColorStop(0, '#b5832b');
+    fGrad.addColorStop(0.25, PCB_COLORS.ENIG_GOLD);
+    fGrad.addColorStop(0.5, PCB_COLORS.ENIG_BRIGHT);
+    fGrad.addColorStop(0.8, PCB_COLORS.ENIG_GOLD);
+    fGrad.addColorStop(1, '#9c6e1f');
+
+    ctx.fillStyle = fGrad;
+    ctx.beginPath();
+    ctx.moveTo(left + 2, fingerTopY);
+    ctx.lineTo(left + fingerWidth - 2, fingerTopY);
+    ctx.lineTo(left + fingerWidth, fingerTopY + 4);
+    ctx.lineTo(left + fingerWidth, fingerTopY + fingerHeight - 5);
+    ctx.lineTo(left + fingerWidth - 3, fingerTopY + fingerHeight);
+    ctx.lineTo(left + 3, fingerTopY + fingerHeight);
+    ctx.lineTo(left, fingerTopY + fingerHeight - 5);
+    ctx.lineTo(left, fingerTopY + 4);
+    ctx.closePath();
+    ctx.fill();
+
+    // Crisp dark copper outline & top chamfer line
+    ctx.strokeStyle = 'rgba(90, 58, 12, 0.75)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255, 245, 200, 0.55)';
+    ctx.fillRect(left + 2, fingerTopY + 2, fingerWidth - 4, 3);
+  }
+
+  // Central PCIe mechanical polarization keyway slot (between x=508 and x=572)
+  ctx.fillStyle = '#030705';
+  ctx.strokeStyle = PCB_COLORS.AGED_COPPER;
+  ctx.lineWidth = 1.5;
+  ctx.fillRect(528, 1858, 24, 62);
+  ctx.strokeRect(528, 1858, 24, 62);
+
+  ctx.restore();
+}
+
 
 export function drawAnnularVia(
   ctx: CanvasRenderingContext2D,

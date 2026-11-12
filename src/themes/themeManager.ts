@@ -40,8 +40,10 @@ export class ThemeManager {
 
     // Register built-in themes
     this.registerTheme(() => new ViennaClassicTheme());
-    this.registerTheme(() => new Pcb2049Theme());
+    this.registerTheme(() => new Pcb2049Theme('standard'));
+    this.registerTheme(() => new Pcb2049Theme('emerald'));
   }
+
 
   /**
    * Registers a theme instance or factory into the ThemeManager registry.
@@ -99,6 +101,16 @@ export class ThemeManager {
     ) {
       return 'pcb_2049';
     }
+    if (
+      cleaned === 'pcb_2049_emerald' ||
+      cleaned === 'pcb2049_emerald' ||
+      cleaned === 'emerald' ||
+      cleaned === 'silicon_master' ||
+      cleaned === 'silicon_master_rev_b'
+    ) {
+      return 'pcb_2049_emerald';
+    }
+
     // Match by display name
     for (const [id, entry] of this.registry.entries()) {
       if (entry.descriptor.name.toLowerCase() === rawId.trim().toLowerCase()) {

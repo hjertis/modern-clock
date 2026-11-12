@@ -1,13 +1,15 @@
 import { PhysicsData } from '../types';
-import { PCB_COLORS, PCB_GEOMETRY } from './constants';
+import { PCB_COLORS, PCB_EMERALD_COLORS, PCB_GEOMETRY, PcbThemeVariant } from './constants';
 import { drawAnnularVia } from './substrate';
 import { WaferShaderRenderer } from './waferShader';
 
 export class PcbPendulumRenderer {
   private waferShader: WaferShaderRenderer;
+  private readonly variant: PcbThemeVariant;
 
-  constructor() {
-    this.waferShader = new WaferShaderRenderer();
+  constructor(variant: PcbThemeVariant = 'standard') {
+    this.variant = variant;
+    this.waferShader = new WaferShaderRenderer(variant);
   }
 
   public init(): void {
@@ -18,13 +20,17 @@ export class PcbPendulumRenderer {
     const pivotX = physicsData.pivot?.x ?? PCB_GEOMETRY.PENDULUM_PIVOT.x;
     const pivotY = physicsData.pivot?.y ?? PCB_GEOMETRY.PENDULUM_PIVOT.y;
     const bobDist = PCB_GEOMETRY.PENDULUM_LENGTH; // 470px
-    const waferR = PCB_GEOMETRY.WAFER_RADIUS; // 114px
+    const waferR = this.variant === 'emerald' ? 156 : PCB_GEOMETRY.WAFER_RADIUS;
 
     ctx.save();
 
     // Clip to lower chamber area below the ZIF mezzanine bridge so top of ribbon inserts cleanly
     ctx.beginPath();
-    ctx.rect(120, pivotY - 4, 840, 820);
+    if (this.variant === 'emerald') {
+      ctx.rect(80, pivotY - 40, 920, 880);
+    } else {
+      ctx.rect(120, pivotY - 4, 840, 820);
+    }
     ctx.clip();
 
     if (physicsData.dimmed) {
@@ -37,17 +43,23 @@ export class PcbPendulumRenderer {
     // Subtle dynamic flex curvature offset in middle of polyimide ribbon cable
     const flexBowX = Math.sin(physicsData.angleRad * 4.0) * 6.5;
 
-    // 1. Draw Flexible Polyimide Ribbon Cable (FPC) with 8 parallel copper/gold traces
-    this.drawPolyimideRibbonCable(ctx, bobDist - waferR + 14, flexBowX, physicsData.timeSec);
+    if (this.variant === 'emerald') {
+      this.drawEmeraldRibbonBus(ctx, bobDist - waferR - 18, flexBowX, physicsData.timeSec);
+      this.drawEmeraldHeavyWaferBob(ctx, 0, bobDist, waferR, physicsData);
+    } else {
+      // 1. Draw Flexible Polyimide Ribbon Cable (FPC) with 8 parallel copper/gold traces
+      this.drawPolyimideRibbonCable(ctx, bobDist - waferR + 14, flexBowX, physicsData.timeSec);
 
-    // 2. Draw Monocrystalline Silicon Wafer Bob with WebGL Specular/Diffraction Shader Pass
-    this.drawSiliconWaferBob(ctx, 0, bobDist, waferR, physicsData);
+      // 2. Draw Monocrystalline Silicon Wafer Bob with WebGL Specular/Diffraction Shader Pass
+      this.drawSiliconWaferBob(ctx, 0, bobDist, waferR, physicsData);
 
-    // 3. Draw Bottom Laser Index Needle & Vernier Pointer sweeping over the beat scale
-    this.drawCalibrationPointer(ctx, 0, bobDist + waferR);
+      // 3. Draw Bottom Laser Index Needle & Vernier Pointer sweeping over the beat scale
+      this.drawCalibrationPointer(ctx, 0, bobDist + waferR);
+    }
 
     ctx.restore();
   }
+
 
   public destroy(): void {
     this.waferShader.destroy();
@@ -300,5 +312,243 @@ export class PcbPendulumRenderer {
 
     ctx.restore();
   }
+
+  /**
+   * Emerald Variant ("Silicon Master // Rev B") Wide Gold/Polyimide Ribbon Bus
+   * connecting from the upper dial chamber into the top of the heavy wafer bezel.
+   */
+  private drawEmeraldRibbonBus(
+    ctx: CanvasRenderingContext2D,
+    ribbonLen: number,
+    flexBowX: number,
+    timeSec: number
+  ): void {
+    const ribbonW = 86;
+    const halfW = ribbonW / 2;
+    const topY = -42;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetX = 4;
+    ctx.shadowOffsetY = 8;
+
+    const ribGrad = ctx.createLinearGradient(-halfW, 0, halfW, 0);
+    ribGrad.addColorStop(0, '#3a1b04');
+    ribGrad.addColorStop(0.18, '#783f0d');
+    ribGrad.addColorStop(0.5, '#b8681b');
+    ribGrad.addColorStop(0.82, '#783f0d');
+    ribGrad.addColorStop(1, '#3a1b04');
+
+    ctx.beginPath();
+    ctx.moveTo(-halfW, topY);
+    ctx.quadraticCurveTo(-halfW + flexBowX, ribbonLen * 0.5, -halfW, ribbonLen + 26);
+    ctx.lineTo(halfW, ribbonLen + 26);
+    ctx.quadraticCurveTo(halfW + flexBowX, ribbonLen * 0.5, halfW, topY);
+    ctx.closePath();
+
+    ctx.fillStyle = ribGrad;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    ctx.strokeStyle = PCB_COLORS.AGED_COPPER;
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    // 12 Parallel Gold/Copper Signal Traces with 45-degree micro-via taps
+    const numTraces = 12;
+    const span = ribbonW - 16;
+    const step = span / (numTraces - 1);
+
+    for (let i = 0; i < numTraces; i++) {
+      const xOff = -span / 2 + i * step;
+      const isBright = i % 2 === 0;
+
+      ctx.beginPath();
+      ctx.moveTo(xOff, topY);
+      ctx.quadraticCurveTo(xOff + flexBowX, ribbonLen * 0.5, xOff, ribbonLen + 22);
+      ctx.strokeStyle = isBright ? PCB_COLORS.ENIG_GOLD : PCB_COLORS.AGED_COPPER;
+      ctx.lineWidth = isBright ? 2.4 : 1.8;
+      ctx.stroke();
+
+      // Synchronous optical clock pulse packet travelling down each ribbon lane
+      const pulsePhase = (timeSec * 1.45 + i * 0.085) % 1.0;
+      const py = topY + pulsePhase * (ribbonLen - topY + 12);
+      const pt = (py - topY) / (ribbonLen - topY + 12);
+      const px = xOff + 4 * pt * (1 - pt) * flexBowX;
+
+      ctx.beginPath();
+      ctx.arc(px, py, 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = PCB_COLORS.ENIG_BRIGHT;
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Emerald Variant ("Silicon Master // Rev B") Heavy Multi-Stepped Dark Machined Bezel
+   * & Boosted Diagonal Cyan/Magenta Specular Diffraction Silicon Wafer Bob.
+   */
+  private drawEmeraldHeavyWaferBob(
+    ctx: CanvasRenderingContext2D,
+    bx: number,
+    by: number,
+    waferR: number,
+    physicsData: PhysicsData
+  ): void {
+    ctx.save();
+    ctx.translate(bx, by);
+
+    const outerBezelR = waferR + 40; // 196px
+    const midBezelR = waferR + 22;   // 178px
+    const innerLipR = waferR + 6;    // 162px
+
+    // 1. Deep 3D Drop Shadow under Heavy Machined Bezel
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.92)';
+    ctx.shadowBlur = 32;
+    ctx.shadowOffsetX = 6;
+    ctx.shadowOffsetY = 16;
+    ctx.beginPath();
+    ctx.arc(0, 0, outerBezelR, 0, Math.PI * 2);
+    ctx.fillStyle = PCB_EMERALD_COLORS.BEZEL_INNER;
+    ctx.fill();
+    ctx.restore();
+
+    // 2. Step 1 (Outer): Heavy Dark Machined Gunmetal Bezel Flange (r = outerBezelR)
+    const outerGrad = ctx.createLinearGradient(-outerBezelR, -outerBezelR, outerBezelR, outerBezelR);
+    outerGrad.addColorStop(0, '#252d34');
+    outerGrad.addColorStop(0.35, PCB_EMERALD_COLORS.BEZEL_OUTER);
+    outerGrad.addColorStop(0.7, PCB_EMERALD_COLORS.BEZEL_MID);
+    outerGrad.addColorStop(1, '#090c0f');
+
+    ctx.beginPath();
+    ctx.arc(0, 0, outerBezelR, 0, Math.PI * 2);
+    ctx.fillStyle = outerGrad;
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    // 4 Machined Bezel Retention Bosses / Hex Bolts at 45°, 135°, 225°, 315°
+    for (const deg of [45, 135, 225, 315]) {
+      const rad = ((deg - 90) * Math.PI) / 180;
+      const rx = Math.cos(rad) * (outerBezelR - 10);
+      const ry = Math.sin(rad) * (outerBezelR - 10);
+
+      ctx.beginPath();
+      ctx.arc(rx, ry, 5.2, 0, Math.PI * 2);
+      ctx.fillStyle = '#080b0e';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+
+    // 3. Step 2 (Middle): Stepped Machined Chamfer Ring (r = midBezelR)
+    const midGrad = ctx.createLinearGradient(-midBezelR, -midBezelR, midBezelR, midBezelR);
+    midGrad.addColorStop(0, '#0a0e12');
+    midGrad.addColorStop(0.5, '#141a1f');
+    midGrad.addColorStop(1, '#1f2830');
+
+    ctx.beginPath();
+    ctx.arc(0, 0, midBezelR, 0, Math.PI * 2);
+    ctx.fillStyle = midGrad;
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Specular machined rim highlight arc on middle bezel step
+    ctx.beginPath();
+    ctx.arc(0, 0, midBezelR - 1.5, -Math.PI * 0.85, -Math.PI * 0.15);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // 4. Step 3 (Inner): Deep Recessed Wafer Cavity Retaining Lip (r = innerLipR)
+    ctx.beginPath();
+    ctx.arc(0, 0, innerLipR, 0, Math.PI * 2);
+    ctx.fillStyle = '#05080b';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(70, 230, 255, 0.28)';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    // 5. Render WebGL Specular / Diffraction Shader Pass for Monocrystalline Silicon Wafer
+    const waferCanvas = this.waferShader.render(
+      physicsData.angleRad,
+      physicsData.angularVelocityNorm,
+      physicsData.timeSec
+    );
+    ctx.drawImage(waferCanvas, -waferR, -waferR, waferR * 2, waferR * 2);
+
+    // 6. Fine Photolithography Die Grid, 4-Quadrant Scribe Crosshair & Diagonal Cyan Flare Overlay
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, waferR - 2, 0, Math.PI * 2);
+    ctx.clip();
+
+    const dieStep = (waferR * 2) / 16;
+    ctx.strokeStyle = 'rgba(18, 28, 42, 0.55)';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    for (let x = -waferR; x <= waferR; x += dieStep) {
+      ctx.moveTo(x, -waferR);
+      ctx.lineTo(x, waferR);
+    }
+    for (let y = -waferR; y <= waferR; y += dieStep) {
+      ctx.moveTo(-waferR, y);
+      ctx.lineTo(waferR, y);
+    }
+    ctx.stroke();
+
+    // Major 4-quadrant photolithography reticle axes
+    ctx.strokeStyle = 'rgba(10, 16, 24, 0.78)';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(-waferR, 0);
+    ctx.lineTo(waferR, 0);
+    ctx.moveTo(0, -waferR);
+    ctx.lineTo(0, waferR);
+    ctx.stroke();
+
+    // Diagonal bottom-left to top-right specular diffraction flare bloom
+    ctx.save();
+    ctx.rotate(-Math.PI / 4 + Math.sin(physicsData.angleRad * 3.0) * 0.05);
+    const flareGrad = ctx.createLinearGradient(0, -waferR * 0.45, 0, waferR * 0.45);
+    flareGrad.addColorStop(0, 'rgba(216, 69, 255, 0)');
+    flareGrad.addColorStop(0.28, 'rgba(216, 69, 255, 0.22)');
+    flareGrad.addColorStop(0.46, 'rgba(56, 248, 255, 0.42)');
+    flareGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.65)');
+    flareGrad.addColorStop(0.54, 'rgba(56, 248, 255, 0.42)');
+    flareGrad.addColorStop(0.72, 'rgba(216, 69, 255, 0.22)');
+    flareGrad.addColorStop(1, 'rgba(216, 69, 255, 0)');
+
+    ctx.fillStyle = flareGrad;
+    ctx.fillRect(-waferR * 1.2, -waferR * 0.45, waferR * 2.4, waferR * 0.9);
+    ctx.restore();
+
+    ctx.restore();
+
+    // 7. Glowing Red Optical Index LED Pip embedded in Bottom of Heavy Bezel (0, +midBezelR + 9)
+    const ledY = midBezelR + 9;
+    const ledGlow = ctx.createRadialGradient(0, ledY, 0.5, 0, ledY, 12);
+    ledGlow.addColorStop(0, '#ffffff');
+    ledGlow.addColorStop(0.3, PCB_EMERALD_COLORS.RED_LED);
+    ledGlow.addColorStop(1, 'rgba(255, 59, 48, 0)');
+    ctx.fillStyle = ledGlow;
+    ctx.beginPath();
+    ctx.arc(0, ledY, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
 }
+
 

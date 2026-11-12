@@ -7,17 +7,23 @@ import {
   TelemetryData,
   ThemeEvent
 } from '../types';
-import { PCB_2049_MANIFEST } from './constants';
+import {
+  PCB_2049_MANIFEST,
+  PCB_2049_EMERALD_MANIFEST,
+  PCB_EMERALD_COLORS,
+  PcbThemeVariant
+} from './constants';
 import { createSubstrateCanvas } from './substrate';
 import { PcbDialRenderer } from './dialRenderer';
 import { PcbPendulumRenderer } from './pendulumRenderer';
 import { PcbHudOverlay } from './hudOverlay';
 
 export class Pcb2049Theme implements Theme {
-  public readonly id = 'pcb_2049';
-  public readonly name = 'PCB-2049 / Industrial Silicon';
+  public readonly id: string;
+  public readonly name: string;
 
-  private manifest: ThemeManifest = structuredClone(PCB_2049_MANIFEST);
+  private readonly variant: PcbThemeVariant;
+  private manifest: ThemeManifest;
   private substrateCanvas: HTMLCanvasElement | null = null;
   private dialRenderer: PcbDialRenderer;
   private pendulumRenderer: PcbPendulumRenderer;
@@ -26,10 +32,18 @@ export class Pcb2049Theme implements Theme {
   private isMounted = false;
   private substrateDrawnForFrame = false;
 
-  constructor() {
-    this.dialRenderer = new PcbDialRenderer();
-    this.pendulumRenderer = new PcbPendulumRenderer();
-    this.hudOverlay = new PcbHudOverlay();
+  constructor(variant: PcbThemeVariant = 'standard') {
+    this.variant = variant;
+    this.id = variant === 'emerald' ? 'pcb_2049_emerald' : 'pcb_2049';
+    this.name =
+      variant === 'emerald' ? 'Silicon Master // Rev B' : 'PCB-2049 / Industrial Silicon';
+    this.manifest = structuredClone(
+      variant === 'emerald' ? PCB_2049_EMERALD_MANIFEST : PCB_2049_MANIFEST
+    );
+
+    this.dialRenderer = new PcbDialRenderer(variant);
+    this.pendulumRenderer = new PcbPendulumRenderer(variant);
+    this.hudOverlay = new PcbHudOverlay(variant);
   }
 
   public getManifest(): ThemeManifest {
@@ -43,11 +57,13 @@ export class Pcb2049Theme implements Theme {
     if (config?.manifest) {
       this.manifest = structuredClone(config.manifest);
     } else {
-      this.manifest = structuredClone(PCB_2049_MANIFEST);
+      this.manifest = structuredClone(
+        this.variant === 'emerald' ? PCB_2049_EMERALD_MANIFEST : PCB_2049_MANIFEST
+      );
     }
 
     // 1. Pre-render FR-4 substrate, 45-deg copper/ENIG trace buses, and silkscreen markings
-    this.substrateCanvas = createSubstrateCanvas();
+    this.substrateCanvas = createSubstrateCanvas(this.variant);
 
     // 2. Initialize Upper Chamber Dial & SMD/Passive footprints
     this.dialRenderer.init();
@@ -113,9 +129,17 @@ export class Pcb2049Theme implements Theme {
     if (this.substrateCanvas) {
       ctx.drawImage(this.substrateCanvas, 0, 0);
     } else {
-      ctx.fillStyle = '#0c0e12';
+      ctx.fillStyle =
+        this.variant === 'emerald' ? PCB_EMERALD_COLORS.MASK_DEEP : '#0c0e12';
       ctx.fillRect(0, 0, 1080, 1920);
     }
   }
 }
+
+export class Pcb2049EmeraldTheme extends Pcb2049Theme {
+  constructor() {
+    super('emerald');
+  }
+}
+
 

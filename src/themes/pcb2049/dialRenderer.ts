@@ -1,6 +1,6 @@
 import { Point2D } from '../../types/theme';
 import { TimeData } from '../types';
-import { PCB_COLORS, PCB_GEOMETRY } from './constants';
+import { PCB_COLORS, PCB_EMERALD_COLORS, PCB_GEOMETRY, PcbThemeVariant } from './constants';
 import { drawAnnularVia } from './substrate';
 
 const DIAL_CANVAS_SIZE = 920;
@@ -8,8 +8,10 @@ const DIAL_HALF = DIAL_CANVAS_SIZE / 2;
 
 export class PcbDialRenderer {
   private staticDialCanvas: HTMLCanvasElement;
+  private readonly variant: PcbThemeVariant;
 
-  constructor() {
+  constructor(variant: PcbThemeVariant = 'standard') {
+    this.variant = variant;
     this.staticDialCanvas = document.createElement('canvas');
     this.staticDialCanvas.width = DIAL_CANVAS_SIZE;
     this.staticDialCanvas.height = DIAL_CANVAS_SIZE;
@@ -20,7 +22,11 @@ export class PcbDialRenderer {
     if (!ctx) return;
 
     ctx.clearRect(0, 0, DIAL_CANVAS_SIZE, DIAL_CANVAS_SIZE);
-    this.drawStaticDialSubstrate(ctx, DIAL_HALF, DIAL_HALF);
+    if (this.variant === 'emerald') {
+      this.drawEmeraldStaticDialSubstrate(ctx, DIAL_HALF, DIAL_HALF);
+    } else {
+      this.drawStaticDialSubstrate(ctx, DIAL_HALF, DIAL_HALF);
+    }
   }
 
   public render(
@@ -45,20 +51,30 @@ export class PcbDialRenderer {
     // 2. Dynamic active electrical telemetry on dial (active second pad glow + surge ring)
     this.drawActiveDialEnergization(ctx, cx, cy, timeData, surgeIntensity);
 
-    // 3. Hour Hand (Laser-etched PCB cantilever truss needle with ENIG rails & vector tip)
-    this.drawHourCantileverHand(ctx, cx, cy, timeData.angles.hour);
+    if (this.variant === 'emerald') {
+      // 3-5. High-phosphor neon orange oscilloscope-beam hands with illuminated via cutouts
+      this.drawEmeraldHourBeamHand(ctx, cx, cy, timeData.angles.hour);
+      this.drawEmeraldMinuteBeamHand(ctx, cx, cy, timeData.angles.minute);
+      this.drawEmeraldSecondBeamHand(ctx, cx, cy, timeData.angles.second, timeData.secondMode);
+      // 6. Machined 3D ENIG gold central hub cap
+      this.drawEmeraldCenterGoldCap(ctx, cx, cy, timeData.angles.second);
+    } else {
+      // 3. Hour Hand (Laser-etched PCB cantilever truss needle with ENIG rails & vector tip)
+      this.drawHourCantileverHand(ctx, cx, cy, timeData.angles.hour);
 
-    // 4. Minute Hand (Laser-etched PCB probe cantilever with micro-via spine & vector core)
-    this.drawMinuteCantileverHand(ctx, cx, cy, timeData.angles.minute);
+      // 4. Minute Hand (Laser-etched PCB probe cantilever with micro-via spine & vector core)
+      this.drawMinuteCantileverHand(ctx, cx, cy, timeData.angles.minute);
 
-    // 5. Second Hand (Illuminated oscilloscope vector trace with phosphor persistence trail)
-    this.drawSecondOscilloscopeHand(ctx, cx, cy, timeData.angles.second, timeData.secondMode);
+      // 5. Second Hand (Illuminated oscilloscope vector trace with phosphor persistence trail)
+      this.drawSecondOscilloscopeHand(ctx, cx, cy, timeData.angles.second, timeData.secondMode);
 
-    // 6. Center MEMS / QFN Clock Synthesizer Hub Cap (U0: CHRONO-ASIC-2049)
-    this.drawCenterOscillatorCap(ctx, cx, cy, timeData.angles.second);
+      // 6. Center MEMS / QFN Clock Synthesizer Hub Cap (U0: CHRONO-ASIC-2049)
+      this.drawCenterOscillatorCap(ctx, cx, cy, timeData.angles.second);
+    }
 
     ctx.restore();
   }
+
 
   private drawStaticDialSubstrate(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
     ctx.save();
@@ -850,5 +866,633 @@ export class PcbDialRenderer {
 
     ctx.restore();
   }
+
+  /**
+   * PCB-2049 Emerald ("Silicon Master // Rev B") Static Dial Substrate:
+   * - Deep translucent emerald-green FR-4 soldermask (#091e15 / #0d2b1e) with copper pour relief
+   * - Multi-lane concentric copper bus arcs between the 12 outer SMD footprints
+   * - 12 segmented wide ENIG gold bus arcs around the chapter ring (r = 250..292)
+   * - High-density radial 45° copper trace fan-outs filling the inner dial area (r = 98..248)
+   *   terminating in micro-vias
+   */
+  private drawEmeraldStaticDialSubstrate(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number
+  ): void {
+    ctx.save();
+
+    // 1. Deep Emerald-Green FR-4 Circular Dial Disc with subtle drop shadow & radial soldermask tint
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+    ctx.shadowBlur = 28;
+    ctx.shadowOffsetY = 10;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 444, 0, Math.PI * 2);
+    const maskGrad = ctx.createRadialGradient(cx, cy, 80, cx, cy, 444);
+    maskGrad.addColorStop(0, PCB_EMERALD_COLORS.MASK_DEEP);
+    maskGrad.addColorStop(0.55, '#071710');
+    maskGrad.addColorStop(0.66, PCB_EMERALD_COLORS.MASK_RICH);
+    maskGrad.addColorStop(0.92, PCB_EMERALD_COLORS.MASK_DEEP);
+    maskGrad.addColorStop(1, '#06150e');
+    ctx.fillStyle = maskGrad;
+    ctx.fill();
+    ctx.restore();
+
+    // 2. Subtle Copper Pour Relief Sectors under the Translucent Emerald Soldermask (r = 294..434)
+    for (let h = 0; h < 12; h++) {
+      const a0 = ((h * 30 - 90 + 4.5) * Math.PI) / 180;
+      const a1 = (((h + 1) * 30 - 90 - 4.5) * Math.PI) / 180;
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, 430, a0, a1);
+      ctx.arc(cx, cy, 296, a1, a0, true);
+      ctx.closePath();
+      ctx.fillStyle = PCB_EMERALD_COLORS.COPPER_POUR_RELIEF;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(200, 150, 62, 0.18)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Radial soldermask trench groove at each 30-degree sector boundary
+      const divRad = ((h * 30 - 90 + 15) * Math.PI) / 180;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(divRad) * 294, cy + Math.sin(divRad) * 294);
+      ctx.lineTo(cx + Math.cos(divRad) * 442, cy + Math.sin(divRad) * 442);
+      ctx.strokeStyle = 'rgba(3, 10, 7, 0.75)';
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+    }
+
+    // Outer Bevel Ring & 72 Perimeter Via / Pad Castellation Ticks
+    ctx.beginPath();
+    ctx.arc(cx, cy, 442, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(200, 150, 62, 0.55)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // 3. Multi-lane Concentric Copper Bus Arcs bridging between the 12 Outer SMD Footprints
+    const outerArcRadii = [386, 393, 400, 407, 414];
+    for (let h = 0; h < 12; h++) {
+      const startAngle = ((h * 30 - 90 + 6.5) * Math.PI) / 180;
+      const endAngle = (((h + 1) * 30 - 90 - 6.5) * Math.PI) / 180;
+      outerArcRadii.forEach((r, idx) => {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, startAngle, endAngle);
+        ctx.strokeStyle = idx % 2 === 0 ? PCB_COLORS.ENIG_GOLD : PCB_COLORS.AGED_COPPER;
+        ctx.lineWidth = idx === 2 ? 2.4 : 1.9;
+        ctx.stroke();
+      });
+    }
+
+    // 4. 60 Radial Passive Solder Pad Pairs along the Outer Emerald Rim (r = 428)
+    for (let i = 0; i < 60; i++) {
+      const angleRad = ((i * 6 - 90) * Math.PI) / 180;
+      const isHour = i % 5 === 0;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(angleRad + Math.PI / 2);
+      const yPad = -429;
+      ctx.fillStyle = isHour ? PCB_COLORS.ENIG_BRIGHT : PCB_COLORS.ENIG_GOLD;
+      ctx.fillRect(-3.5, yPad - 4, 7, 3.2);
+      ctx.fillRect(-3.5, yPad + 2, 7, 3.2);
+      ctx.fillStyle = '#102419';
+      ctx.fillRect(-2.8, yPad - 1, 5.6, 3);
+      ctx.restore();
+    }
+
+    // 5. 12 Outer SMD IC Package Footprints + Glowing Green/Amber Diagnostic SMD LEDs
+    const smdRadius = 344;
+    for (let h = 1; h <= 12; h++) {
+      const hourIndex = h % 12;
+      const angleRad = ((hourIndex * 30 - 90) * Math.PI) / 180;
+      const isCardinalQfn = hourIndex % 3 === 0;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(angleRad + Math.PI / 2);
+      ctx.translate(0, -smdRadius);
+
+      if (isCardinalQfn) {
+        this.drawQfn16Footprint(ctx, h);
+      } else {
+        this.drawSoic8Footprint(ctx, h);
+      }
+      ctx.restore();
+
+      // Flanking SMD passive components & glowing green/amber status LEDs around the outer emerald ring
+      for (const side of [-1, 1]) {
+        const subAngle = angleRad + side * 0.16;
+        const px = cx + Math.cos(subAngle) * 326;
+        const py = cy + Math.sin(subAngle) * 326;
+        drawAnnularVia(ctx, px, py, 3.5, 1.5);
+
+        // Glowing green or gold SMD LED on alternating sectors matching the reference image
+        if ((h + (side > 0 ? 1 : 0)) % 2 === 0) {
+          const ledR = side > 0 ? 314 : 362;
+          const lx = cx + Math.cos(angleRad + side * 0.11) * ledR;
+          const ly = cy + Math.sin(angleRad + side * 0.11) * ledR;
+          const isGreen = (h + side) % 3 === 0;
+          const ledCol = isGreen ? PCB_EMERALD_COLORS.GREEN_LED : PCB_COLORS.ENIG_BRIGHT;
+
+          const g = ctx.createRadialGradient(lx, ly, 0.5, lx, ly, 10);
+          g.addColorStop(0, '#ffffff');
+          g.addColorStop(0.3, ledCol);
+          g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(lx, ly, 10, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // 6. Segmented Wide ENIG Gold Bus Arcs around the Chapter Ring (r = 250..292)
+    this.drawEmeraldSegmentedGoldChapterRing(ctx, cx, cy);
+
+    // 7. High-Density Inner Dial 45° Copper Trace Fan-Outs terminating in Micro-Vias (r = 98..248)
+    this.drawEmeraldDenseInnerDialTraces(ctx, cx, cy);
+
+    // 8. Central Emerald Green Soldermask Hub Island (r = 0..96)
+    const hubGrad = ctx.createRadialGradient(cx - 18, cy - 18, 8, cx, cy, 96);
+    hubGrad.addColorStop(0, '#133b29');
+    hubGrad.addColorStop(0.65, PCB_EMERALD_COLORS.MASK_RICH);
+    hubGrad.addColorStop(1, PCB_EMERALD_COLORS.MASK_DEEP);
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, 96, 0, Math.PI * 2);
+    ctx.fillStyle = hubGrad;
+    ctx.fill();
+
+    // Crisp double copper/gold retaining bezel around the emerald inner hub island
+    ctx.beginPath();
+    ctx.arc(cx, cy, 96, 0, Math.PI * 2);
+    ctx.strokeStyle = PCB_COLORS.AGED_COPPER;
+    ctx.lineWidth = 3.5;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, 91, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(244, 196, 98, 0.65)';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  /**
+   * Draws the 12 segmented wide ENIG gold bus arcs around the chapter ring (r = 250..292)
+   * and the 12 bold radial gold spoke dividers separating the inner dial sectors.
+   */
+  private drawEmeraldSegmentedGoldChapterRing(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number
+  ): void {
+    ctx.save();
+
+    // Recessed dark trench behind the wide gold chapter bus ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, 294, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 246, 0, Math.PI * 2, true);
+    ctx.fillStyle = '#050c08';
+    ctx.fill();
+
+    // Outer & inner copper framing rings for the segmented gold bus band
+    for (const r of [248, 293]) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = PCB_COLORS.AGED_COPPER;
+      ctx.lineWidth = 2.4;
+      ctx.stroke();
+    }
+
+    // 3 concentric wide ENIG gold bus arc bands inside each of the 12 hour sectors
+    const bandRadii = [256, 269.5, 283];
+    for (let h = 0; h < 12; h++) {
+      const sectorStart = ((h * 30 - 90 + 2.2) * Math.PI) / 180;
+      const sectorEnd = (((h + 1) * 30 - 90 - 2.2) * Math.PI) / 180;
+
+      bandRadii.forEach((r, bandIdx) => {
+        // Metallic gold base bar
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, sectorStart, sectorEnd);
+        ctx.strokeStyle = bandIdx === 1 ? PCB_COLORS.ENIG_BRIGHT : PCB_COLORS.ENIG_GOLD;
+        ctx.lineWidth = 7.5;
+        ctx.lineCap = 'butt';
+        ctx.stroke();
+
+        // Subtle inner aged-copper bevel line
+        ctx.beginPath();
+        ctx.arc(cx, cy, r - 2.5, sectorStart, sectorEnd);
+        ctx.strokeStyle = PCB_COLORS.AGED_COPPER;
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      });
+
+      // Bold radial gold spoke divider at each hour boundary (from inner hub r=96 to r=294)
+      const spokeRad = ((h * 30 - 90) * Math.PI) / 180;
+      const x1 = cx + Math.cos(spokeRad) * 96;
+      const y1 = cy + Math.sin(spokeRad) * 96;
+      const x2 = cx + Math.cos(spokeRad) * 294;
+      const y2 = cy + Math.sin(spokeRad) * 294;
+
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = '#040907';
+      ctx.lineWidth = 9;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = PCB_COLORS.ENIG_GOLD;
+      ctx.lineWidth = 4.2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = PCB_COLORS.ENIG_BRIGHT;
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Fills the open inner dial area (r = 98..246) with dense, radial 45° copper trace
+   * fan-outs terminating in micro-vias inside each of the 12 hour sectors.
+   */
+  private drawEmeraldDenseInnerDialTraces(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number
+  ): void {
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Dark emerald/substrate inner dial cavity backing
+    ctx.beginPath();
+    ctx.arc(cx, cy, 246, 0, Math.PI * 2);
+    ctx.fillStyle = '#06110c';
+    ctx.fill();
+
+    // For each of the 12 hour sectors, route 9 dense parallel traces with 45° dogleg jogs and micro-vias
+    for (let h = 0; h < 12; h++) {
+      const sectorCenterDeg = h * 30 + 15 - 90;
+      const centerRad = (sectorCenterDeg * Math.PI) / 180;
+
+      for (let lane = -4; lane <= 4; lane++) {
+        const absLane = Math.abs(lane);
+        const sign = lane < 0 ? -1 : lane > 0 ? 1 : 0;
+
+        // Angular positions within the 30-degree sector (-12.5° to +12.5°)
+        const innerAngle = centerRad + (lane * 2.5 * Math.PI) / 180;
+        const outerAngle = centerRad + (lane * 2.85 * Math.PI) / 180;
+
+        // Staggered inner start and outer termination radii so micro-vias form stepped chevron arrays
+        const rInner = lane === 0 ? 102 : 104 + absLane * 5.5;
+        const rJogStart = 136 + absLane * 8;
+        const rJogEnd = 158 + absLane * 8;
+        const rOuter = 240 - absLane * 4.5;
+
+        const p1x = cx + Math.cos(innerAngle) * rInner;
+        const p1y = cy + Math.sin(innerAngle) * rInner;
+
+        const p2x = cx + Math.cos(innerAngle) * rJogStart;
+        const p2y = cy + Math.sin(innerAngle) * rJogStart;
+
+        const jogAngle = outerAngle + sign * 0.014;
+        const p3x = cx + Math.cos(jogAngle) * rJogEnd;
+        const p3y = cy + Math.sin(jogAngle) * rJogEnd;
+
+        const p4x = cx + Math.cos(jogAngle) * rOuter;
+        const p4y = cy + Math.sin(jogAngle) * rOuter;
+
+        // Soldermask shadow under trace
+        ctx.beginPath();
+        ctx.moveTo(p1x, p1y);
+        ctx.lineTo(p2x, p2y);
+        ctx.lineTo(p3x, p3y);
+        ctx.lineTo(p4x, p4y);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.lineWidth = 3.8;
+        ctx.stroke();
+
+        // Crisp ENIG gold & aged copper trace
+        const isGold = lane === 0 || absLane === 2 || absLane === 4;
+        ctx.beginPath();
+        ctx.moveTo(p1x, p1y);
+        ctx.lineTo(p2x, p2y);
+        ctx.lineTo(p3x, p3y);
+        ctx.lineTo(p4x, p4y);
+        ctx.strokeStyle = isGold ? PCB_COLORS.ENIG_GOLD : PCB_COLORS.AGED_COPPER;
+        ctx.lineWidth = lane === 0 ? 2.4 : isGold ? 1.9 : 1.6;
+        ctx.stroke();
+
+        // Micro-vias terminating both ends of the trace fan-out
+        drawAnnularVia(ctx, p4x, p4y, 2.9, 1.2);
+        if (absLane % 2 === 1 || lane === 0) {
+          drawAnnularVia(ctx, p1x, p1y, 2.7, 1.1);
+        }
+      }
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Emerald Variant Hour Hand:
+   * High-phosphor neon orange oscilloscope-beam hand (#ff6a1a outer bloom, #ffd2a6 hot core)
+   * with illuminated via cutouts near the tip and center hub.
+   */
+  private drawEmeraldHourBeamHand(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    angleDeg: number
+  ): void {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate((angleDeg * Math.PI) / 180);
+
+    this.renderNeonOrangeBeamBlade(ctx, {
+      tipY: -248,
+      tailY: 32,
+      hubViaY: -56,
+      tipViaY: -188,
+      baseHalfW: 11.5,
+      midHalfW: 7.5
+    });
+
+    ctx.restore();
+  }
+
+  /**
+   * Emerald Variant Minute Hand:
+   * Long high-phosphor neon orange oscilloscope-beam hand (#ff6a1a outer bloom, #ffd2a6 hot core)
+   * with illuminated via cutouts near the tip and center hub.
+   */
+  private drawEmeraldMinuteBeamHand(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    angleDeg: number
+  ): void {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate((angleDeg * Math.PI) / 180);
+
+    this.renderNeonOrangeBeamBlade(ctx, {
+      tipY: -372,
+      tailY: 36,
+      hubViaY: -62,
+      tipViaY: -292,
+      baseHalfW: 10.5,
+      midHalfW: 6.5
+    });
+
+    ctx.restore();
+  }
+
+  /**
+   * Shared multi-pass neon-orange oscilloscope beam renderer for hour & minute hands
+   * matching the reference image's glowing dual-rail blades & illuminated via cutouts.
+   */
+  private renderNeonOrangeBeamBlade(
+    ctx: CanvasRenderingContext2D,
+    opts: {
+      tipY: number;
+      tailY: number;
+      hubViaY: number;
+      tipViaY: number;
+      baseHalfW: number;
+      midHalfW: number;
+    }
+  ): void {
+    const { tipY, tailY, hubViaY, tipViaY, baseHalfW, midHalfW } = opts;
+
+    // 1. Wide ambient neon-orange phosphor bloom along the entire hand axis
+    const bloomGrad = ctx.createLinearGradient(0, tailY, 0, tipY);
+    bloomGrad.addColorStop(0, 'rgba(255, 106, 26, 0.15)');
+    bloomGrad.addColorStop(0.25, 'rgba(255, 106, 26, 0.35)');
+    bloomGrad.addColorStop(0.85, 'rgba(255, 106, 26, 0.38)');
+    bloomGrad.addColorStop(1, 'rgba(255, 210, 166, 0.5)');
+
+    const traceOuterContour = () => {
+      ctx.beginPath();
+      ctx.moveTo(-4, tailY);
+      ctx.lineTo(-4, -36);
+      // 45-degree flare around hub via cutout
+      ctx.lineTo(-baseHalfW, hubViaY + 12);
+      ctx.lineTo(-baseHalfW, hubViaY - 12);
+      ctx.lineTo(-midHalfW, hubViaY - 26);
+      // Tapered dual-rail shaft out to tip via
+      ctx.lineTo(-midHalfW * 0.72, tipViaY + 16);
+      ctx.lineTo(-midHalfW * 0.92, tipViaY);
+      ctx.lineTo(-midHalfW * 0.55, tipViaY - 16);
+      // Laser needle point
+      ctx.lineTo(0, tipY);
+      ctx.lineTo(midHalfW * 0.55, tipViaY - 16);
+      ctx.lineTo(midHalfW * 0.92, tipViaY);
+      ctx.lineTo(midHalfW * 0.72, tipViaY + 16);
+      ctx.lineTo(midHalfW, hubViaY - 26);
+      ctx.lineTo(baseHalfW, hubViaY - 12);
+      ctx.lineTo(baseHalfW, hubViaY + 12);
+      ctx.lineTo(4, -36);
+      ctx.lineTo(4, tailY);
+      ctx.closePath();
+    };
+
+    // Dark translucent core slot inside the blade so dual rails read clearly
+    ctx.save();
+    traceOuterContour();
+    ctx.fillStyle = 'rgba(24, 10, 4, 0.55)';
+    ctx.shadowColor = PCB_EMERALD_COLORS.BEAM_ORANGE_BLOOM;
+    ctx.shadowBlur = 26;
+    ctx.fill();
+    ctx.restore();
+
+    // 2. Outer neon-orange bloom pass (#ff6a1a)
+    ctx.save();
+    traceOuterContour();
+    ctx.strokeStyle = PCB_EMERALD_COLORS.BEAM_ORANGE_BLOOM;
+    ctx.lineWidth = 5.2;
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = PCB_EMERALD_COLORS.BEAM_ORANGE_BLOOM;
+    ctx.shadowBlur = 22;
+    ctx.stroke();
+    ctx.fillStyle = bloomGrad;
+    ctx.fill();
+    ctx.restore();
+
+    // 3. Hot core pass (#ffd2a6 -> #fff2e2)
+    ctx.save();
+    traceOuterContour();
+    ctx.strokeStyle = PCB_EMERALD_COLORS.BEAM_HOT_CORE;
+    ctx.lineWidth = 2.1;
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = PCB_EMERALD_COLORS.BEAM_ORANGE_BLOOM;
+    ctx.shadowBlur = 10;
+    ctx.stroke();
+
+    // Central laser filament connecting hub via to tip via and needle point
+    ctx.beginPath();
+    ctx.moveTo(0, hubViaY - 8);
+    ctx.lineTo(0, tipViaY + 7);
+    ctx.moveTo(0, tipViaY - 7);
+    ctx.lineTo(0, tipY);
+    ctx.strokeStyle = PCB_EMERALD_COLORS.BEAM_WHITE_HOT;
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    ctx.restore();
+
+    // 4. Illuminated Via Cutouts near Center Hub and near Tip
+    for (const [vy, vr] of [
+      [hubViaY, 6.2],
+      [tipViaY, 4.6]
+    ] as const) {
+      ctx.save();
+      // Dark PCB drill bore inside via cutout
+      ctx.beginPath();
+      ctx.arc(0, vy, vr, 0, Math.PI * 2);
+      ctx.fillStyle = '#07150e';
+      ctx.fill();
+
+      // Glowing orange/core annular ring around via cutout
+      ctx.shadowColor = PCB_EMERALD_COLORS.BEAM_ORANGE_BLOOM;
+      ctx.shadowBlur = 12;
+      ctx.strokeStyle = PCB_EMERALD_COLORS.BEAM_HOT_CORE;
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Emerald Variant Second Hand:
+   * High-phosphor neon orange vector trace with sweep persistence trail & illuminated via pip.
+   */
+  private drawEmeraldSecondBeamHand(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    angleDeg: number,
+    secondMode: 'tick' | 'sweep'
+  ): void {
+    const rad = ((angleDeg - 90) * Math.PI) / 180;
+
+    // 1. Neon-Orange Phosphor Persistence Sweep Trail
+    ctx.save();
+    const trailSpanRad = secondMode === 'sweep' ? 0.28 : 0.14;
+    const segments = 14;
+    for (let i = 0; i < segments; i++) {
+      const t0 = i / segments;
+      const t1 = (i + 1) / segments;
+      const a0 = rad - trailSpanRad * (1 - t0);
+      const a1 = rad - trailSpanRad * (1 - t1);
+      ctx.beginPath();
+      ctx.arc(cx, cy, 392, a0, a1);
+      ctx.strokeStyle = `rgba(255, 106, 26, ${(t1 * 0.5).toFixed(3)})`;
+      ctx.lineWidth = 3.6 * t1;
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 2. Glowing Neon-Orange Second Beam
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate((angleDeg * Math.PI) / 180);
+
+    ctx.shadowColor = PCB_EMERALD_COLORS.BEAM_ORANGE_BLOOM;
+    ctx.shadowBlur = 16;
+    ctx.strokeStyle = PCB_EMERALD_COLORS.BEAM_ORANGE_BLOOM;
+    ctx.lineWidth = 3.0;
+    ctx.beginPath();
+    ctx.moveTo(0, 48);
+    ctx.lineTo(0, -396);
+    ctx.stroke();
+
+    ctx.strokeStyle = PCB_EMERALD_COLORS.BEAM_HOT_CORE;
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.moveTo(0, 48);
+    ctx.lineTo(0, -396);
+    ctx.stroke();
+
+    // Illuminated via cutout near tip
+    ctx.beginPath();
+    ctx.arc(0, -376, 3.8, 0, Math.PI * 2);
+    ctx.fillStyle = '#07150e';
+    ctx.fill();
+    ctx.strokeStyle = PCB_EMERALD_COLORS.BEAM_HOT_CORE;
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  /**
+   * Emerald Variant Center Hub Cap:
+   * 3D Machined Spun-ENIG-Gold Cylindrical Cap matching the reference image.
+   */
+  private drawEmeraldCenterGoldCap(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    _secondAngleDeg: number
+  ): void {
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Drop shadow onto emerald hub island
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetX = 3;
+    ctx.shadowOffsetY = 6;
+    ctx.beginPath();
+    ctx.arc(0, 0, 38, 0, Math.PI * 2);
+    ctx.fillStyle = '#8c621b';
+    ctx.fill();
+    ctx.restore();
+
+    // Outer spun-gold bevel cylinder (r = 38)
+    const outerCapGrad = ctx.createLinearGradient(-34, -34, 34, 34);
+    outerCapGrad.addColorStop(0, '#ffe8a3');
+    outerCapGrad.addColorStop(0.35, PCB_COLORS.ENIG_GOLD);
+    outerCapGrad.addColorStop(0.7, PCB_COLORS.AGED_COPPER);
+    outerCapGrad.addColorStop(1, '#6e4b12');
+
+    ctx.beginPath();
+    ctx.arc(0, 0, 38, 0, Math.PI * 2);
+    ctx.fillStyle = outerCapGrad;
+    ctx.fill();
+    ctx.strokeStyle = PCB_COLORS.ENIG_BRIGHT;
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
+    // Inner recessed machined gold boss (r = 25)
+    const innerBossGrad = ctx.createRadialGradient(-8, -10, 2, 0, 0, 26);
+    innerBossGrad.addColorStop(0, '#fff0be');
+    innerBossGrad.addColorStop(0.45, PCB_COLORS.ENIG_GOLD);
+    innerBossGrad.addColorStop(0.85, '#b8842d');
+    innerBossGrad.addColorStop(1, '#7a5416');
+
+    ctx.beginPath();
+    ctx.arc(0, 0, 25, 0, Math.PI * 2);
+    ctx.fillStyle = innerBossGrad;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(70, 44, 8, 0.75)';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    ctx.restore();
+  }
 }
+
 

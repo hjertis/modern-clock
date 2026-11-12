@@ -1,5 +1,7 @@
 import { Point2D, ThemeManifest } from '../../types/theme';
 
+export type PcbThemeVariant = 'standard' | 'emerald';
+
 export const PCB_COLORS = {
   /** Deep matte FR-4 black substrate */
   SUBSTRATE_BG: '#0c0e12',
@@ -35,6 +37,34 @@ export const PCB_COLORS = {
   POLYIMIDE_BASE: '#6e3a0c',
   POLYIMIDE_EDGE: '#b8681b',
   POLYIMIDE_DARK: '#3d1f05'
+} as const;
+
+export const PCB_EMERALD_COLORS = {
+  /** Deep translucent emerald-green FR-4 soldermask */
+  MASK_DEEP: '#091e15',
+  MASK_RICH: '#0d2b1e',
+  MASK_HIGHLIGHT: '#133d2b',
+  MASK_DARK_CAVITY: '#05120c',
+  MASK_OUTER_CHASSIS: '#040907',
+  COPPER_POUR_RELIEF: 'rgba(18, 62, 42, 0.55)',
+  COPPER_POUR_EDGE: 'rgba(200, 150, 62, 0.24)',
+
+  /** High-phosphor neon orange oscilloscope-beam hands */
+  BEAM_ORANGE_BLOOM: '#ff6a1a',
+  BEAM_ORANGE_MID: '#ff8533',
+  BEAM_HOT_CORE: '#ffd2a6',
+  BEAM_WHITE_HOT: '#fff2e2',
+
+  /** Heavy machined wafer bezel */
+  BEZEL_OUTER: '#181e22',
+  BEZEL_MID: '#101518',
+  BEZEL_INNER: '#090c0e',
+  BEZEL_HIGHLIGHT: 'rgba(255, 255, 255, 0.14)',
+
+  /** Lower chamber indicator LEDs */
+  CYAN_LED: '#38f8ff',
+  RED_LED: '#ff3b30',
+  GREEN_LED: '#38ff7a'
 } as const;
 
 export const PCB_GEOMETRY = {
@@ -89,6 +119,13 @@ export const PCB_2049_MANIFEST: ThemeManifest = {
     height: 440
   }
 };
+
+export const PCB_2049_EMERALD_MANIFEST: ThemeManifest = {
+  ...structuredClone(PCB_2049_MANIFEST),
+  name: 'Silicon Master // Rev B',
+  version: '2.0.49-revB'
+};
+
 
 /**
  * 45-degree routed lateral trace bus paths from the lower daemon interface
@@ -150,4 +187,29 @@ export const LEFT_LATERAL_BUS_PATHS: Point2D[][] = [
 export const RIGHT_LATERAL_BUS_PATHS: Point2D[][] = LEFT_LATERAL_BUS_PATHS.map((path) =>
   path.map((pt) => ({ x: 1080 - pt.x, y: pt.y }))
 );
+
+/**
+ * Tight, multi-lane 45-degree parallel copper trace buses hugging the lower wafer bezel
+ * and terminating into the vertical PCIe-style ENIG gold edge-connector fingers
+ * along the bottom edge of the viewport (used by pcb_2049_emerald).
+ */
+export const EMERALD_LOWER_LEFT_BUS_PATHS: Point2D[][] = Array.from({ length: 8 }, (_, lane) => {
+  const s = lane * 8.5;
+  const fingerX = 252 + lane * 24;
+  return [
+    { x: 356, y: 1384 + lane * 10 },
+    { x: 248 - s, y: 1384 + lane * 10 },
+    { x: 158 - s, y: 1474 + lane * 10 },
+    { x: 158 - s, y: 1690 - lane * 4 },
+    { x: 222 + s * 0.4, y: 1754 + s * 0.6 },
+    { x: fingerX - 18, y: 1754 + s * 0.6 },
+    { x: fingerX, y: 1772 + s * 0.6 },
+    { x: fingerX, y: 1852 }
+  ];
+});
+
+export const EMERALD_LOWER_RIGHT_BUS_PATHS: Point2D[][] = EMERALD_LOWER_LEFT_BUS_PATHS.map((path) =>
+  path.map((pt) => ({ x: 1080 - pt.x, y: pt.y }))
+);
+
 

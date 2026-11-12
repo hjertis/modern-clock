@@ -1,3 +1,5 @@
+import { PcbThemeVariant } from './constants';
+
 /**
  * WebGL Specular & Thin-Film Diffraction Grating Shader for the
  * Monocrystalline Silicon Wafer Pendulum Bob (PCB-2049 Theme).
@@ -23,6 +25,7 @@ const FRAGMENT_SHADER_SRC = `
   uniform float u_swingAngleRad;
   uniform float u_angularVel;
   uniform float u_timeSec;
+  uniform float u_variant;
 
   // Spectral rainbow conversion (physical thin-film interference approximation)
   vec3 spectralRainbow(float t) {
@@ -57,8 +60,82 @@ const FRAGMENT_SHADER_SRC = `
     // Wafer edge exclusion zone (outer 4% bevel ring)
     float edgeZone = smoothstep(0.91, 0.94, r);
 
+    // Emerald Variant ("Silicon Master // Rev B"): boosted diagonal cyan/magenta specular diffraction flare
+    if (u_variant > 0.5) {
+      float gridScale = 8.5;
+      vec2 dieCoord = uv * gridScale;
+      vec2 dieId = floor(dieCoord);
+      vec2 dieUv = fract(dieCoord);
+
+      float streetWidth = 0.06;
+      float inStreetX = step(dieUv.x, streetWidth) + step(1.0 - streetWidth, dieUv.x);
+      float inStreetY = step(dieUv.y, streetWidth) + step(1.0 - streetWidth, dieUv.y);
+      // Major 4-quadrant reticle scribe streets along X=0 and Y=0
+      float majorCross = step(abs(uv.x), 0.011) + step(abs(uv.y), 0.011);
+      float isStreet = clamp(inStreetX + inStreetY + majorCross, 0.0, 1.0);
+
+      vec2 innerUv = clamp((dieUv - streetWidth) / (1.0 - 2.0 * streetWidth), 0.0, 1.0);
+      vec2 subBlockId = floor(innerUv * vec2(3.0, 3.0));
+      float subHash = hash21(dieId * 9.17 + subBlockId);
+      float dieHash = hash21(dieId + vec2(13.7, 29.3));
+
+      float gratingFreq = 40.0 + floor(subHash * 4.0) * 18.0;
+      float gratingAxis = mod(subBlockId.x + subBlockId.y, 2.0) < 0.5 ? innerUv.x : innerUv.y;
+      float microGrating = 0.5 + 0.5 * sin(gratingAxis * gratingFreq * 6.283185);
+
+      // Deep indigo/slate silicon base
+      vec3 baseSilicon = vec3(0.055, 0.085, 0.145) + vec3(0.02, 0.03, 0.05) * subHash;
+      baseSilicon *= (0.82 + 0.18 * microGrating);
+
+      // Diagonal axis from bottom-left (-1,-1) to top-right (+1,+1); perp axis (-0.7071, +0.7071)
+      float swingShift = sin(u_swingAngleRad * 3.5) * 0.12;
+      vec2 diagPerp = normalize(vec2(-0.7071, 0.7071));
+      vec2 diagAlong = normalize(vec2(0.7071, 0.7071));
+      float dPerp = dot(uv, diagPerp) - swingShift;
+      float dAlong = dot(uv, diagAlong);
+
+      // Intense diagonal cyan/magenta diffraction lobes
+      float cyanBeam = exp(-abs(dPerp) * 5.8);
+      float hotLaserSpine = exp(-abs(dPerp) * 22.0);
+      float magentaWing = exp(-pow((abs(dPerp) - 0.24) * 3.8, 2.0));
+      float secondaryDiag = exp(-abs(dot(uv, diagAlong) - swingShift * 0.5) * 7.5) * 0.45;
+
+      vec3 cyanColor = vec3(0.22, 0.96, 1.0);
+      vec3 magentaColor = vec3(0.84, 0.26, 0.98);
+      vec3 violetColor = vec3(0.42, 0.30, 0.96);
+
+      // Per-die cyan/magenta/violet shimmer
+      vec3 dieTint = mix(violetColor, mix(magentaColor, cyanColor, fract(dieHash + dAlong * 0.5)), 0.65 + 0.35 * subHash);
+      float activeMask = (1.0 - isStreet * 0.82) * (1.0 - edgeZone);
+
+      vec3 color = baseSilicon;
+      color = mix(color, dieTint, activeMask * (0.48 + 0.32 * microGrating));
+      color += magentaColor * magentaWing * activeMask * (0.72 + 0.28 * dieHash);
+      color += cyanColor * (cyanBeam * 0.95 + secondaryDiag * 0.5) * activeMask * (0.78 + 0.22 * microGrating);
+      color += vec3(0.88, 0.99, 1.0) * hotLaserSpine * 0.92 * (1.0 - edgeZone);
+
+      // Bright edge flare hotspots where the diagonal beam meets the bottom-left and top-right wafer rim
+      float rimFlare1 = exp(-length(uv - vec2(0.64, 0.64)) * 6.5);
+      float rimFlare2 = exp(-length(uv - vec2(-0.64, -0.64)) * 6.5);
+      color += vec3(0.85, 0.98, 1.0) * (rimFlare1 + rimFlare2) * 0.75;
+
+      // Dark metallic scribe streets
+      vec3 streetCol = mix(vec3(0.06, 0.09, 0.14), cyanColor * 0.65, cyanBeam * 0.6);
+      color = mix(color, streetCol, isStreet * (1.0 - edgeZone));
+
+      if (edgeZone > 0.0) {
+        vec3 edgeDark = vec3(0.06, 0.08, 0.11);
+        color = mix(color, edgeDark, edgeZone);
+      }
+
+      color *= 1.0 - 0.14 * r * r;
+      gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
+      return;
+    }
+
     // 1. Lithography Die Grid (11x11 dies across wafer diameter)
     float gridScale = 5.5;
+
     vec2 dieCoord = uv * gridScale;
     vec2 dieId = floor(dieCoord);
     vec2 dieUv = fract(dieCoord);
@@ -161,14 +238,18 @@ export class WaferShaderRenderer {
   private uSwingAngleLoc: WebGLUniformLocation | null = null;
   private uAngularVelLoc: WebGLUniformLocation | null = null;
   private uTimeSecLoc: WebGLUniformLocation | null = null;
+  private uVariantLoc: WebGLUniformLocation | null = null;
 
   private readonly resolution = 300;
+  private readonly variant: PcbThemeVariant;
 
-  constructor() {
+  constructor(variant: PcbThemeVariant = 'standard') {
+    this.variant = variant;
     this.canvas = document.createElement('canvas');
     this.canvas.width = this.resolution;
     this.canvas.height = this.resolution;
   }
+
 
   public init(): void {
     try {
@@ -227,6 +308,7 @@ export class WaferShaderRenderer {
       this.uSwingAngleLoc = gl.getUniformLocation(program, 'u_swingAngleRad');
       this.uAngularVelLoc = gl.getUniformLocation(program, 'u_angularVel');
       this.uTimeSecLoc = gl.getUniformLocation(program, 'u_timeSec');
+      this.uVariantLoc = gl.getUniformLocation(program, 'u_variant');
     } catch (err) {
       console.warn('[WaferShaderRenderer] WebGL initialization fallback to 2D:', err);
       this.gl = null;
@@ -248,6 +330,7 @@ export class WaferShaderRenderer {
       if (this.uSwingAngleLoc) gl.uniform1f(this.uSwingAngleLoc, swingAngleRad);
       if (this.uAngularVelLoc) gl.uniform1f(this.uAngularVelLoc, angularVelocityNorm);
       if (this.uTimeSecLoc) gl.uniform1f(this.uTimeSecLoc, timeSec % 3600);
+      if (this.uVariantLoc) gl.uniform1f(this.uVariantLoc, this.variant === 'emerald' ? 1.0 : 0.0);
 
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     } else {
@@ -255,6 +338,7 @@ export class WaferShaderRenderer {
     }
     return this.canvas;
   }
+
 
   public destroy(): void {
     if (this.gl) {

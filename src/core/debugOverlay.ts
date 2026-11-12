@@ -98,11 +98,12 @@ export class DebugOverlay {
         <button data-theme-id="${t.id}" class="debug-btn theme-select-btn ${
           t.id === activeThemeId ? 'active' : ''
         }">
-          ${t.id === 'pcb_2049' ? '⚡ ' : '🕰️ '}${t.name}
+          ${t.id === 'pcb_2049' ? '⚡ ' : t.id === 'pcb_2049_emerald' ? '🟢 ' : '🕰️ '}${t.name}
         </button>
       `
       )
       .join('');
+
 
     this.panelElement.innerHTML = `
       <div class="debug-header">
@@ -442,10 +443,16 @@ export class DebugOverlay {
         this.toggleHUD();
       } else if ((e.key === 't' || e.key === 'T') && this.themeManager) {
         e.preventDefault();
+        const currentId = this.themeManager.getActiveThemeId();
         const nextId =
-          this.themeManager.getActiveThemeId() === 'pcb_2049' ? 'vienna_classic' : 'pcb_2049';
+          currentId === 'pcb_2049'
+            ? 'pcb_2049_emerald'
+            : currentId === 'pcb_2049_emerald'
+              ? 'vienna_classic'
+              : 'pcb_2049';
         this.themeManager.setTheme(nextId);
       }
+
     });
   }
 }

@@ -102,10 +102,13 @@ async function bootstrap() {
     if (!themePillLabel) return;
     if (themeId === 'pcb_2049') {
       themePillLabel.textContent = '⚡ PCB-2049 / Silicon (T)';
+    } else if (themeId === 'pcb_2049_emerald') {
+      themePillLabel.textContent = '🟢 Silicon Master // Rev B (T)';
     } else {
       themePillLabel.textContent = '🕰️ Vienna Classic (T)';
     }
   };
+
 
   themeManager.onThemeChange((theme, manifest) => {
     if (manifest) {
@@ -155,14 +158,20 @@ async function bootstrap() {
       });
     }
 
-    // Theme pill button toggles between PCB-2049 and Vienna Classic
+    // Theme pill button cycles registered themes (PCB-2049 -> Silicon Master // Rev B -> Vienna Classic)
     if (themeTogglePill) {
       themeTogglePill.addEventListener('click', () => {
+        const currentId = themeManager.getActiveThemeId();
         const nextId =
-          themeManager.getActiveThemeId() === 'pcb_2049' ? 'vienna_classic' : 'pcb_2049';
+          currentId === 'pcb_2049'
+            ? 'pcb_2049_emerald'
+            : currentId === 'pcb_2049_emerald'
+              ? 'vienna_classic'
+              : 'pcb_2049';
         themeManager.setTheme(nextId);
       });
     }
+
 
     // Connect WebSocket
     wsClient.connect();

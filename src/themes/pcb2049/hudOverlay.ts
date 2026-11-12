@@ -4,7 +4,10 @@ import {
   PCB_COLORS,
   PCB_GEOMETRY,
   LEFT_LATERAL_BUS_PATHS,
-  RIGHT_LATERAL_BUS_PATHS
+  RIGHT_LATERAL_BUS_PATHS,
+  EMERALD_LOWER_LEFT_BUS_PATHS,
+  EMERALD_LOWER_RIGHT_BUS_PATHS,
+  PcbThemeVariant
 } from './constants';
 import { drawAnnularVia } from './substrate';
 
@@ -23,6 +26,11 @@ export class PcbHudOverlay {
   private rxEventCount = 0;
   private lastSurgeTimeMs = -10000;
   private phaseHistory: number[] = [];
+  private readonly variant: PcbThemeVariant;
+
+  constructor(variant: PcbThemeVariant = 'standard') {
+    this.variant = variant;
+  }
 
   public onEvent(event: ThemeEvent): void {
     if (
@@ -63,9 +71,34 @@ export class PcbHudOverlay {
       });
     }
 
+    // In emerald variant, also fire electron packets from the bottom PCIe gold edge fingers up into the wafer bezel
+    if (this.variant === 'emerald') {
+      const lowerEdgeBuses = [
+        ...EMERALD_LOWER_LEFT_BUS_PATHS,
+        ...EMERALD_LOWER_RIGHT_BUS_PATHS
+      ].map((p) => [...p].reverse());
+
+      for (let wave = 0; wave < 2; wave++) {
+        lowerEdgeBuses.forEach((path, idx) => {
+          if (idx % 2 !== 0) return;
+          const { segmentLengths, totalLength } = this.computePathMetrics(path);
+          this.packets.push({
+            path,
+            segmentLengths,
+            totalLength,
+            startTimeMs: now + wave * 150 + (idx % 8) * 22,
+            durationMs: isUrgent ? 460 : 560,
+            isUrgent,
+            tailLengthPx: 80
+          });
+        });
+      }
+    }
+
     // Trigger dial ring surge when the leading wave reaches the dial
     this.lastSurgeTimeMs = now + 500;
   }
+
 
   public getDialSurgeIntensity(): number {
     const now = performance.now();
@@ -296,8 +329,10 @@ export class PcbHudOverlay {
     ctx.lineTo(x, y + cham);
     ctx.closePath();
 
-    ctx.fillStyle = 'rgba(10, 12, 17, 0.86)';
+    ctx.fillStyle =
+      this.variant === 'emerald' ? 'rgba(6, 20, 14, 0.88)' : 'rgba(10, 12, 17, 0.86)';
     ctx.fill();
+
     ctx.strokeStyle = PCB_COLORS.AGED_COPPER;
     ctx.lineWidth = 1.6;
     ctx.stroke();
