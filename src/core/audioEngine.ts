@@ -29,7 +29,12 @@ export type TickDirection =
   | 'left-to-right'
   | 'right-to-left';
 
-export type SoundProfile = 'vienna_classic' | 'pcb_2049' | 'pcb_2049_emerald';
+export type SoundProfile =
+  | 'vienna_classic'
+  | 'pcb_2049'
+  | 'pcb_2049_emerald'
+  | 'hybrid_base'
+  | 'nixie_hybrid';
 
 export class ClockAudioEngine {
   private ctx: AudioContext | null = null;
@@ -141,9 +146,21 @@ export class ClockAudioEngine {
    * Sets the active sound profile based on theme id
    */
   public setTheme(themeId: string): void {
-    const clean = themeId.trim().toLowerCase().replace(/[\s-]+/g, '_');
+    const clean = themeId.trim().toLowerCase().replace(/[\s/-]+/g, '_');
     if (clean === 'vienna' || clean === 'vienna_classic' || clean === 'default') {
       this.activeProfile = 'vienna_classic';
+    } else if (
+      clean === 'nixie_hybrid' ||
+      clean === 'nixie' ||
+      clean === 'nixie_chronograph'
+    ) {
+      this.activeProfile = 'nixie_hybrid';
+    } else if (
+      clean === 'hybrid_base' ||
+      clean === 'hybrid' ||
+      clean === 'hybrid_analog_digital'
+    ) {
+      this.activeProfile = 'hybrid_base';
     } else if (clean === 'pcb_2049_emerald' || clean.includes('emerald')) {
       this.activeProfile = 'pcb_2049_emerald';
     } else {
@@ -190,6 +207,10 @@ export class ClockAudioEngine {
 
     if (this.activeProfile === 'vienna_classic') {
       this.playViennaEscapement(isTick);
+    } else if (this.activeProfile === 'nixie_hybrid') {
+      this.playNixieReedEscapement(isTick);
+    } else if (this.activeProfile === 'hybrid_base') {
+      this.playHybridEscapement(isTick);
     } else {
       const isEmerald = this.activeProfile === 'pcb_2049_emerald';
       this.playRelayEscapement(isTick, isEmerald);
@@ -535,6 +556,225 @@ export class ClockAudioEngine {
   }
 
   /**
+   * Hybrid Base: Clean precision mechanical escapement tick + subtle chime profile
+   */
+  private playHybridEscapement(isTick: boolean): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const masterGain = this.ctx.createGain();
+    masterGain.gain.setValueAtTime(this.volume * 0.36, t);
+    masterGain.connect(this.ctx.destination);
+
+    // 1. Crisp mechanical pallet impulse
+    const noiseBuffer = this.getNoiseBuffer();
+    if (noiseBuffer) {
+      const noiseSource = this.ctx.createBufferSource();
+      noiseSource.buffer = noiseBuffer;
+      noiseSource.loop = true;
+
+      const bpFilter = this.ctx.createBiquadFilter();
+      bpFilter.type = 'bandpass';
+      bpFilter.frequency.setValueAtTime(isTick ? 2900 : 2300, t);
+      bpFilter.Q.setValueAtTime(3.2, t);
+
+      const clickGain = this.ctx.createGain();
+      const duration = isTick ? 0.011 : 0.014;
+      clickGain.gain.setValueAtTime(0.6, t);
+      clickGain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+      noiseSource.connect(bpFilter);
+      bpFilter.connect(clickGain);
+      clickGain.connect(masterGain);
+
+      noiseSource.start(t, Math.random() * 1.5);
+      noiseSource.stop(t + duration + 0.005);
+    }
+
+    // 2. Damped machined alloy body resonance
+    const bodyOsc = this.ctx.createOscillator();
+    const bodyGain = this.ctx.createGain();
+    bodyOsc.type = 'triangle';
+    bodyOsc.frequency.setValueAtTime(isTick ? 620 : 480, t);
+    bodyOsc.frequency.exponentialRampToValueAtTime(isTick ? 280 : 210, t + 0.024);
+
+    bodyGain.gain.setValueAtTime(0.45, t);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
+
+    bodyOsc.connect(bodyGain);
+    bodyGain.connect(masterGain);
+
+    bodyOsc.start(t);
+    bodyOsc.stop(t + 0.03);
+  }
+
+  private playHybridChime(isHour: boolean): void {
+    if (
+      this.isMuted ||
+      !this.chimesEnabled ||
+      this.volume <= 0 ||
+      !this.ctx ||
+      this.ctx.state !== 'running'
+    )
+      return;
+
+    const t = this.ctx.currentTime;
+    const notes = isHour
+      ? [
+          { freq: 587.33, offset: 0.0, decay: 2.0, gain: 0.55 }, // D5
+          { freq: 880.0, offset: 0.16, decay: 2.4, gain: 0.65 } // A5
+        ]
+      : [{ freq: 880.0, offset: 0.0, decay: 1.4, gain: 0.4 }];
+
+    for (const n of notes) {
+      const startTime = t + n.offset;
+      const osc = this.ctx.createOscillator();
+      const overtone = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(n.freq, startTime);
+
+      overtone.type = 'triangle';
+      overtone.frequency.setValueAtTime(n.freq * 2.0, startTime);
+
+      const overtoneGain = this.ctx.createGain();
+      overtoneGain.gain.setValueAtTime(0.22, startTime);
+      overtoneGain.gain.exponentialRampToValueAtTime(0.0001, startTime + n.decay * 0.5);
+
+      gain.gain.setValueAtTime(0.0001, startTime);
+      gain.gain.linearRampToValueAtTime(this.volume * n.gain * 0.35, startTime + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + n.decay);
+
+      osc.connect(gain);
+      overtone.connect(overtoneGain);
+      overtoneGain.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(startTime);
+      osc.stop(startTime + n.decay + 0.05);
+      overtone.start(startTime);
+      overtone.stop(startTime + n.decay * 0.5 + 0.05);
+    }
+  }
+
+  /**
+   * Nixie Hybrid: Crisp dry-reed relay click inside a glass envelope + warm brass case resonance
+   */
+  private playNixieReedEscapement(isTick: boolean): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const masterGain = this.ctx.createGain();
+    masterGain.gain.setValueAtTime(this.volume * 0.38, t);
+    masterGain.connect(this.ctx.destination);
+
+    // 1. Crisp dry-reed switch contact snap
+    const noiseBuffer = this.getNoiseBuffer();
+    if (noiseBuffer) {
+      const noiseSource = this.ctx.createBufferSource();
+      noiseSource.buffer = noiseBuffer;
+      noiseSource.loop = true;
+
+      const hpFilter = this.ctx.createBiquadFilter();
+      hpFilter.type = 'highpass';
+      hpFilter.frequency.setValueAtTime(isTick ? 3600 : 3100, t);
+      hpFilter.Q.setValueAtTime(2.0, t);
+
+      const clickGain = this.ctx.createGain();
+      const clickDur = 0.007;
+      clickGain.gain.setValueAtTime(0.68, t);
+      clickGain.gain.exponentialRampToValueAtTime(0.0001, t + clickDur);
+
+      noiseSource.connect(hpFilter);
+      hpFilter.connect(clickGain);
+      clickGain.connect(masterGain);
+
+      noiseSource.start(t, Math.random() * 1.5);
+      noiseSource.stop(t + clickDur + 0.004);
+    }
+
+    // 2. Borosilicate glass envelope micro-ping + walnut/brass mount resonance
+    const glassOsc = this.ctx.createOscillator();
+    const glassGain = this.ctx.createGain();
+    glassOsc.type = 'sine';
+    glassOsc.frequency.setValueAtTime(isTick ? 4180 : 3520, t);
+    glassGain.gain.setValueAtTime(0.28, t);
+    glassGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.022);
+
+    glassOsc.connect(glassGain);
+    glassGain.connect(masterGain);
+    glassOsc.start(t);
+    glassOsc.stop(t + 0.026);
+
+    const brassOsc = this.ctx.createOscillator();
+    const brassGain = this.ctx.createGain();
+    brassOsc.type = 'triangle';
+    brassOsc.frequency.setValueAtTime(isTick ? 440 : 330, t);
+    brassOsc.frequency.exponentialRampToValueAtTime(isTick ? 210 : 165, t + 0.032);
+    brassGain.gain.setValueAtTime(0.36, t);
+    brassGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.034);
+
+    brassOsc.connect(brassGain);
+    brassGain.connect(masterGain);
+    brassOsc.start(t);
+    brassOsc.stop(t + 0.038);
+  }
+
+  /**
+   * Nixie Hybrid: Warm resonant brass-and-glass harmonic chime
+   */
+  private playNixieBrassGlassChime(isHour: boolean): void {
+    if (
+      this.isMuted ||
+      !this.chimesEnabled ||
+      this.volume <= 0 ||
+      !this.ctx ||
+      this.ctx.state !== 'running'
+    )
+      return;
+
+    const t = this.ctx.currentTime;
+    const sequence = isHour
+      ? [
+          { freq: 523.25, delay: 0.0, decay: 2.8, gain: 0.65 }, // C5 warm brass fundamental
+          { freq: 783.99, delay: 0.22, decay: 3.1, gain: 0.72 }, // G5 fifth
+          { freq: 1174.66, delay: 0.44, decay: 3.4, gain: 0.58 } // D6 glass harmonic
+        ]
+      : [{ freq: 783.99, delay: 0.0, decay: 2.0, gain: 0.5 }];
+
+    for (const step of sequence) {
+      const startTime = t + step.delay;
+      const brassOsc = this.ctx.createOscillator();
+      const glassHarmonic = this.ctx.createOscillator();
+      const noteGain = this.ctx.createGain();
+      const glassGain = this.ctx.createGain();
+
+      brassOsc.type = 'sine';
+      brassOsc.frequency.setValueAtTime(step.freq, startTime);
+
+      // Inharmonic borosilicate glass overtone (2.756x)
+      glassHarmonic.type = 'sine';
+      glassHarmonic.frequency.setValueAtTime(step.freq * 2.756, startTime);
+
+      glassGain.gain.setValueAtTime(0.26, startTime);
+      glassGain.gain.exponentialRampToValueAtTime(0.0001, startTime + step.decay * 0.65);
+
+      noteGain.gain.setValueAtTime(0.0001, startTime);
+      noteGain.gain.linearRampToValueAtTime(this.volume * step.gain * 0.38, startTime + 0.006);
+      noteGain.gain.exponentialRampToValueAtTime(0.0001, startTime + step.decay);
+
+      brassOsc.connect(noteGain);
+      glassHarmonic.connect(glassGain);
+      glassGain.connect(noteGain);
+      noteGain.connect(this.ctx.destination);
+
+      brassOsc.start(startTime);
+      brassOsc.stop(startTime + step.decay + 0.05);
+      glassHarmonic.start(startTime);
+      glassHarmonic.stop(startTime + step.decay * 0.65 + 0.05);
+    }
+  }
+
+  /**
    * Top of the hour hook: dispatches theme-adaptive hour chime
    */
   public onHour(hour: number): void {
@@ -544,6 +784,10 @@ export class ClockAudioEngine {
     if (this.activeProfile === 'vienna_classic') {
       const count = hour % 12 || 12;
       this.playHourStrikes(count);
+    } else if (this.activeProfile === 'nixie_hybrid') {
+      this.playNixieBrassGlassChime(true);
+    } else if (this.activeProfile === 'hybrid_base') {
+      this.playHybridChime(true);
     } else {
       const isEmerald = this.activeProfile === 'pcb_2049_emerald';
       this.playFuturisticQuartzHourPulse(isEmerald);
@@ -567,6 +811,10 @@ export class ClockAudioEngine {
         }, p * 2200);
         this.activeChimeTimeouts.push(timerId);
       }
+    } else if (this.activeProfile === 'nixie_hybrid') {
+      this.playNixieBrassGlassChime(false);
+    } else if (this.activeProfile === 'hybrid_base') {
+      this.playHybridChime(false);
     } else {
       // Subtle quartz ping for futuristic PCB
       if (!this.ctx || this.ctx.state !== 'running') return;

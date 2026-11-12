@@ -112,7 +112,17 @@ export class DebugOverlay {
         <button data-theme-id="${t.id}" class="debug-btn theme-select-btn ${
           t.id === activeThemeId ? 'active' : ''
         }">
-          ${t.id === 'pcb_2049' ? '⚡ ' : t.id === 'pcb_2049_emerald' ? '🟢 ' : '🕰️ '}${t.name}
+          ${
+            t.id === 'pcb_2049'
+              ? '⚡ '
+              : t.id === 'pcb_2049_emerald'
+                ? '🟢 '
+                : t.id === 'nixie_hybrid'
+                  ? '🔥 '
+                  : t.id === 'hybrid_base'
+                    ? '🎛️ '
+                    : '🕰️ '
+          }${t.name}
         </button>
       `
       )
@@ -585,13 +595,10 @@ export class DebugOverlay {
         this.toggleHUD();
       } else if ((e.key === 't' || e.key === 'T') && this.themeManager) {
         e.preventDefault();
+        const ids = this.themeManager.getAvailableThemeIds();
         const currentId = this.themeManager.getActiveThemeId();
-        const nextId =
-          currentId === 'pcb_2049'
-            ? 'pcb_2049_emerald'
-            : currentId === 'pcb_2049_emerald'
-              ? 'vienna_classic'
-              : 'pcb_2049';
+        const idx = ids.indexOf(currentId);
+        const nextId = ids[(idx + 1) % ids.length] || 'pcb_2049';
         this.themeManager.setTheme(nextId);
       }
 

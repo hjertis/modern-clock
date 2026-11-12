@@ -1,11 +1,16 @@
 import { ThemeManifest, HandMode, ClockMode } from '../types/theme';
-import { calculateHandAngles, calculatePendulumAngle } from '../utils/math';
+import { calculatePendulumAngle } from '../utils/math';
 import { ClockDomElements } from './themeLoader';
 import { ThemeManager } from '../themes/themeManager';
 import { TimeData, PhysicsData, TelemetryData } from '../themes/types';
 import { WSStatus } from './wsClient';
 import { ClockAudioEngine } from './audioEngine';
 import { SleepManager } from './sleepManager';
+import {
+  DisplayOptions,
+  formatSynchronizedTime,
+  sharedDisplayOptions
+} from './timeFormatter';
 
 export interface ClockEngineOptions {
   secondMode?: HandMode;
@@ -13,6 +18,7 @@ export interface ClockEngineOptions {
   themeManager?: ThemeManager;
   audioEngine?: ClockAudioEngine;
   sleepManager?: SleepManager;
+  displayOptions?: Partial<DisplayOptions>;
 }
 
 export class ClockEngine {
@@ -70,6 +76,23 @@ export class ClockEngine {
     if (options?.sleepManager) {
       this.setSleepManager(options.sleepManager);
     }
+    if (options?.displayOptions) {
+      this.setDisplayOptions(options.displayOptions);
+    }
+  }
+
+  public setDisplayOptions(options: Partial<DisplayOptions> | Record<string, unknown>): DisplayOptions {
+    const updated = sharedDisplayOptions.setOptions(options);
+    this.themeManager?.dispatchEvent({
+      type: 'config_change',
+      payload: { displayOptions: updated },
+      timestamp: Date.now()
+    });
+    return updated;
+  }
+
+  public getDisplayOptions(): DisplayOptions {
+    return sharedDisplayOptions.getOptions();
   }
 
   public setMode(mode: ClockMode): void {
@@ -219,11 +242,14 @@ export class ClockEngine {
     const maxAngleDeg = activeManifest?.pendulum.maxAngleDeg ?? 6.0;
     const pivot = activeManifest?.pendulum.pivot ?? { x: 540, y: 990 };
 
-    // 1. Calculate Hand Angles
-    const angles = calculateHandAngles(currentDate, this.secondMode);
+    // 1. Derive synchronized Hand Angles and Digital Time Cells from the single timestamp tick
+    const displayOptions = sharedDisplayOptions.getOptions();
+    const digitalTick = formatSynchronizedTime(currentDate, displayOptions, this.secondMode);
+    const angles = { ...digitalTick.angles };
     if (isSleeping) {
       // In sleep (cat-safe) mode: update minute/hour hands only, lock second hand to minute hand
       angles.second = angles.minute;
+      digitalTick.angles.second = angles.minute;
     }
 
     // 2. Simple Harmonic Motion for Pendulum: θ(t) = θ_max * cos((2π / T) * t)
@@ -298,15 +324,17 @@ export class ClockEngine {
 
       const timeData: TimeData = {
         date: currentDate,
-        hours: currentDate.getHours(),
-        minutes: currentDate.getMinutes(),
-        seconds: currentDate.getSeconds(),
-        milliseconds: currentDate.getMilliseconds(),
+        hours: digitalTick.hours24,
+        minutes: digitalTick.minutes,
+        seconds: digitalTick.seconds,
+        milliseconds: digitalTick.milliseconds,
         angles,
         secondMode: this.secondMode,
         timestampMs: currentSimulatedMs,
         realTimeMs: nowPerf,
-        deltaTimeSec: rawDeltaMs / 1000
+        deltaTimeSec: rawDeltaMs / 1000,
+        displayOptions,
+        digitalTick
       };
 
       const physicsData: PhysicsData = {

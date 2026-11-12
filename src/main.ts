@@ -7,6 +7,7 @@ import { ClockWebSocketClient } from './core/wsClient';
 import { ThemeManager } from './themes/themeManager';
 import { ClockAudioEngine } from './core/audioEngine';
 import { SleepManager, TimeSchedule } from './core/sleepManager';
+import { DisplayOptions } from './core/timeFormatter';
 import { NotificationPayload, Theme, ClockMode } from './types/theme';
 
 export interface ClockPublicAPI {
@@ -17,6 +18,8 @@ export interface ClockPublicAPI {
   toggleMode: () => 'tick' | 'sweep';
   setTimeMultiplier: (multiplier: number) => void;
   setTheme: (themeId: string) => Promise<Theme>;
+  setDisplayOptions: (options: Partial<DisplayOptions>) => DisplayOptions;
+  getDisplayOptions: () => DisplayOptions;
   setClockMode: (mode: ClockMode) => void;
   getClockMode: () => ClockMode;
   wake: () => void;
@@ -137,6 +140,10 @@ async function bootstrap() {
       themePillLabel.textContent = '⚡ PCB-2049 / Silicon (T)';
     } else if (themeId === 'pcb_2049_emerald') {
       themePillLabel.textContent = '🟢 Silicon Master // Rev B (T)';
+    } else if (themeId === 'hybrid_base') {
+      themePillLabel.textContent = '🎛️ Hybrid Analog/Digital (T)';
+    } else if (themeId === 'nixie_hybrid') {
+      themePillLabel.textContent = '🔥 Nixie Chronograph (T)';
     } else {
       themePillLabel.textContent = '🕰️ Vienna Classic (T)';
     }
@@ -196,16 +203,13 @@ async function bootstrap() {
       });
     }
 
-    // Theme pill button cycles registered themes (PCB-2049 -> Silicon Master // Rev B -> Vienna Classic)
+    // Theme pill button cycles registered themes
     if (themeTogglePill) {
       themeTogglePill.addEventListener('click', () => {
+        const ids = themeManager.getAvailableThemeIds();
         const currentId = themeManager.getActiveThemeId();
-        const nextId =
-          currentId === 'pcb_2049'
-            ? 'pcb_2049_emerald'
-            : currentId === 'pcb_2049_emerald'
-              ? 'vienna_classic'
-              : 'pcb_2049';
+        const idx = ids.indexOf(currentId);
+        const nextId = ids[(idx + 1) % ids.length] || 'pcb_2049';
         themeManager.setTheme(nextId);
       });
     }
@@ -223,6 +227,8 @@ async function bootstrap() {
       toggleMode: () => clockEngine.toggleSecondMode(),
       setTimeMultiplier: (multiplier: number) => clockEngine.setTimeMultiplier(multiplier),
       setTheme: (themeId: string) => themeManager.setTheme(themeId),
+      setDisplayOptions: (options: Partial<DisplayOptions>) => clockEngine.setDisplayOptions(options),
+      getDisplayOptions: () => clockEngine.getDisplayOptions(),
       setClockMode: (mode: ClockMode) => sleepManager.setMode(mode, true),
       getClockMode: () => sleepManager.getMode(),
       wake: () => sleepManager.wake(),
@@ -245,6 +251,9 @@ async function bootstrap() {
     // Subtle welcome glance notification demonstrating reactive electron packets & circuit toast
     setTimeout(() => {
       const activeId = themeManager.getActiveThemeId();
+      const activeTheme = themeManager.getActiveTheme();
+      const themeDisplayName = activeTheme?.name || (activeId === 'pcb_2049' ? 'PCB-2049' : 'Vienna Classic');
+
       if (activeId === 'pcb_2049') {
         notificationManager.notify({
           category: 'info',
@@ -260,7 +269,7 @@ async function bootstrap() {
           priority: 'normal',
           title: 'Chamber Online',
           message:
-            'Vienna Classic 1080×1920 engine synchronized to epoch time. Press T to switch theme or H for HUD.',
+            `${themeDisplayName} 1080×1920 engine synchronized to epoch time. Press T to switch theme or H for HUD.`,
           timeoutMs: 5000
         });
       }

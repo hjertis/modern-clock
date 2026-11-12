@@ -1,10 +1,17 @@
 import { HandMode, NotificationPayload, Point2D, ThemeManifest, ClockMode } from '../types/theme';
 import { HandAngles } from '../utils/math';
 import { WSStatus } from '../core/wsClient';
+import { DisplayOptions, SynchronizedTimeTick } from '../core/timeFormatter';
 
 export type { ClockMode };
 
-export type ThemeId = 'vienna_classic' | 'pcb_2049' | string;
+export type ThemeId =
+  | 'vienna_classic'
+  | 'pcb_2049'
+  | 'pcb_2049_emerald'
+  | 'hybrid_base'
+  | 'nixie_hybrid'
+  | string;
 
 export interface ThemeConfig {
   width: number;
@@ -25,6 +32,8 @@ export interface TimeData {
   timestampMs: number;
   realTimeMs: number;
   deltaTimeSec: number;
+  displayOptions?: DisplayOptions;
+  digitalTick?: SynchronizedTimeTick;
 }
 
 export interface PhysicsData {

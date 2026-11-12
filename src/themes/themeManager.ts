@@ -2,6 +2,8 @@ import { ThemeManifest } from '../types/theme';
 import { Theme, ThemeConfig, ThemeEvent } from './types';
 import { ViennaClassicTheme } from './viennaClassic';
 import { Pcb2049Theme } from './pcb2049';
+import { HybridBaseTheme } from './hybrid_base';
+import { NixieHybridTheme } from './nixie_hybrid';
 import { ClockAudioEngine } from '../core/audioEngine';
 
 export type ThemeFactory = () => Theme;
@@ -49,6 +51,8 @@ export class ThemeManager {
     this.registerTheme(() => new ViennaClassicTheme());
     this.registerTheme(() => new Pcb2049Theme('standard'));
     this.registerTheme(() => new Pcb2049Theme('emerald'));
+    this.registerTheme(() => new HybridBaseTheme());
+    this.registerTheme(() => new NixieHybridTheme());
   }
 
 
@@ -144,6 +148,21 @@ export class ThemeManager {
       cleaned === 'silicon_master_rev_b'
     ) {
       return 'pcb_2049_emerald';
+    }
+    if (
+      cleaned === 'hybrid' ||
+      cleaned === 'hybrid_base' ||
+      cleaned === 'hybrid_analog_digital' ||
+      cleaned === 'hybrid_analog/digital'
+    ) {
+      return 'hybrid_base';
+    }
+    if (
+      cleaned === 'nixie' ||
+      cleaned === 'nixie_hybrid' ||
+      cleaned === 'nixie_chronograph'
+    ) {
+      return 'nixie_hybrid';
     }
 
     // Match by display name

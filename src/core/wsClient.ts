@@ -5,6 +5,7 @@ import { ThemeManager } from '../themes/themeManager';
 import { ClockAudioEngine } from './audioEngine';
 import { SleepManager, TimeSchedule } from './sleepManager';
 import { HandMode, NotificationPayload, ClockMode } from '../types/theme';
+import { DisplayOptions, HourFormat } from './timeFormatter';
 
 export type WSStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
 
@@ -90,12 +91,24 @@ export interface SetAudioActionMessage {
   chimes?: boolean;
 }
 
+export interface SetDisplayOptionsActionMessage {
+  action: 'set_display_options';
+  hourFormat?: HourFormat;
+  hour_format?: HourFormat;
+  showSeconds?: boolean;
+  show_seconds?: boolean;
+  showDate?: boolean;
+  show_date?: boolean;
+  options?: Partial<DisplayOptions>;
+}
+
 export type BackendIncomingMessage =
   | BackendInitMessage
   | BackendNotifyMessage
   | BackendConfigMessage
   | SetThemeActionMessage
   | SetAudioActionMessage
+  | SetDisplayOptionsActionMessage
   | SetModeActionMessage
   | SetScheduleActionMessage
   | WakeActionMessage;
@@ -430,6 +443,19 @@ export class ClockWebSocketClient {
         this.audioEngine.unlock();
         this.audioEngine.onHour(new Date().getHours());
       }
+      return;
+    }
+
+    // 7. Handle `{ "action": "set_display_options", "hourFormat": "24h" | "12h", "showSeconds": bool, "showDate": bool }`
+    if (
+      ('action' in msg && msg.action === 'set_display_options') ||
+      ('type' in msg && msg.type === 'set_display_options')
+    ) {
+      const dispMsg = msg as SetDisplayOptionsActionMessage & Record<string, unknown>;
+      const payload =
+        dispMsg.options && typeof dispMsg.options === 'object' ? dispMsg.options : dispMsg;
+      const updated = this.clockEngine.setDisplayOptions(payload);
+      console.log('[Clock WS] Updated display options:', updated);
       return;
     }
 
