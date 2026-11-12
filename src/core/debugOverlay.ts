@@ -119,9 +119,11 @@ export class DebugOverlay {
                 ? '🟢 '
                 : t.id === 'nixie_hybrid'
                   ? '🔥 '
-                  : t.id === 'hybrid_base'
-                    ? '🎛️ '
-                    : '🕰️ '
+                  : t.id === 'tourbillon_3d'
+                    ? '⚙️ '
+                    : t.id === 'hybrid_base'
+                      ? '🎛️ '
+                      : '🕰️ '
           }${t.name}
         </button>
       `

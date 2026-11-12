@@ -34,7 +34,8 @@ export type SoundProfile =
   | 'pcb_2049'
   | 'pcb_2049_emerald'
   | 'hybrid_base'
-  | 'nixie_hybrid';
+  | 'nixie_hybrid'
+  | 'tourbillon_3d';
 
 export class ClockAudioEngine {
   private ctx: AudioContext | null = null;
@@ -150,6 +151,13 @@ export class ClockAudioEngine {
     if (clean === 'vienna' || clean === 'vienna_classic' || clean === 'default') {
       this.activeProfile = 'vienna_classic';
     } else if (
+      clean === 'tourbillon_3d' ||
+      clean === 'tourbillon' ||
+      clean === 'horological_tourbillon' ||
+      clean === 'horological_tourbillon_3d'
+    ) {
+      this.activeProfile = 'tourbillon_3d';
+    } else if (
       clean === 'nixie_hybrid' ||
       clean === 'nixie' ||
       clean === 'nixie_chronograph'
@@ -207,6 +215,8 @@ export class ClockAudioEngine {
 
     if (this.activeProfile === 'vienna_classic') {
       this.playViennaEscapement(isTick);
+    } else if (this.activeProfile === 'tourbillon_3d') {
+      this.playTourbillonEscapement(isTick);
     } else if (this.activeProfile === 'nixie_hybrid') {
       this.playNixieReedEscapement(isTick);
     } else if (this.activeProfile === 'hybrid_base') {
@@ -775,6 +785,141 @@ export class ClockAudioEngine {
   }
 
   /**
+   * Tourbillon 3D: Rich mechanical Swiss lever ruby-pallet escapement tick +
+   * Breguet hairspring overtone ring + deep walnut/brass cabinet resonance.
+   */
+  private playTourbillonEscapement(isTick: boolean): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const masterGain = this.ctx.createGain();
+    masterGain.gain.setValueAtTime(this.volume * 0.44, t);
+    masterGain.connect(this.ctx.destination);
+
+    // 1. Ruby pallet locking & impulse snap
+    const noiseBuffer = this.getNoiseBuffer();
+    if (noiseBuffer) {
+      const noiseSource = this.ctx.createBufferSource();
+      noiseSource.buffer = noiseBuffer;
+      noiseSource.loop = true;
+
+      const bpFilter = this.ctx.createBiquadFilter();
+      bpFilter.type = 'bandpass';
+      bpFilter.frequency.setValueAtTime(isTick ? 3150 : 2540, t);
+      bpFilter.Q.setValueAtTime(3.6, t);
+
+      const clickGain = this.ctx.createGain();
+      const clickDur = isTick ? 0.015 : 0.019;
+      clickGain.gain.setValueAtTime(isTick ? 0.7 : 0.56, t);
+      clickGain.gain.exponentialRampToValueAtTime(0.0001, t + clickDur);
+
+      noiseSource.connect(bpFilter);
+      bpFilter.connect(clickGain);
+      clickGain.connect(masterGain);
+
+      noiseSource.start(t, Math.random() * 1.5);
+      noiseSource.stop(t + clickDur + 0.005);
+    }
+
+    // 2. Breguet hairspring & escape wheel tooth metallic micro-ring
+    const ringOsc = this.ctx.createOscillator();
+    const ringGain = this.ctx.createGain();
+    ringOsc.type = 'sine';
+    ringOsc.frequency.setValueAtTime(isTick ? 3480 : 2890, t);
+    ringGain.gain.setValueAtTime(0.24, t);
+    ringGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.028);
+
+    ringOsc.connect(ringGain);
+    ringGain.connect(masterGain);
+    ringOsc.start(t);
+    ringOsc.stop(t + 0.032);
+
+    // 3. Deep walnut chamber & heavy brass bridge acoustic resonance
+    const bodyOsc = this.ctx.createOscillator();
+    const bodyGain = this.ctx.createGain();
+    bodyOsc.type = 'triangle';
+    bodyOsc.frequency.setValueAtTime(isTick ? 295 : 215, t);
+    bodyOsc.frequency.exponentialRampToValueAtTime(isTick ? 130 : 98, t + 0.052);
+
+    bodyGain.gain.setValueAtTime(0.58, t);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.055);
+
+    bodyOsc.connect(bodyGain);
+    bodyGain.connect(masterGain);
+    bodyOsc.start(t);
+    bodyOsc.stop(t + 0.06);
+  }
+
+  /**
+   * Tourbillon 3D: Deep resonant cathedral gong chime (fundamental + sub-octave hum + bronze overtones)
+   */
+  private playCathedralChime(isHour: boolean, hourCount = 1): void {
+    if (
+      this.isMuted ||
+      !this.chimesEnabled ||
+      this.volume <= 0 ||
+      !this.ctx ||
+      this.ctx.state !== 'running'
+    )
+      return;
+
+    const strikeCathedralBell = (freq: number, durationSec: number, gainScale: number) => {
+      if (!this.ctx || this.isMuted || !this.chimesEnabled) return;
+      const now = this.ctx.currentTime;
+      const bellMaster = this.ctx.createGain();
+      bellMaster.gain.setValueAtTime(this.volume * gainScale * 0.44, now);
+      bellMaster.connect(this.ctx.destination);
+
+      // Deep cathedral bronze partials: sub-hum (0.5x), fundamental (1.0x), minor third/fifth/bell overtones
+      const partials: Array<{ ratio: number; gain: number; decay: number; type: OscillatorType }> = [
+        { ratio: 0.5, gain: 0.65, decay: durationSec * 1.15, type: 'sine' },
+        { ratio: 1.0, gain: 0.95, decay: durationSec, type: 'sine' },
+        { ratio: 1.5, gain: 0.52, decay: durationSec * 0.82, type: 'triangle' },
+        { ratio: 2.756, gain: 0.36, decay: durationSec * 0.64, type: 'sine' },
+        { ratio: 5.404, gain: 0.16, decay: durationSec * 0.4, type: 'sine' }
+      ];
+
+      for (const p of partials) {
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = p.type;
+        osc.frequency.setValueAtTime(freq * p.ratio, now);
+
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.linearRampToValueAtTime(p.gain, now + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + p.decay);
+
+        osc.connect(g);
+        g.connect(bellMaster);
+        osc.start(now);
+        osc.stop(now + p.decay + 0.05);
+      }
+    };
+
+    if (!isHour) {
+      // Deep cathedral fifth cadence on quarter-hour: B2 (123.47 Hz) -> E2 (82.41 Hz)
+      strikeCathedralBell(123.47, 3.4, 0.72);
+      const tid = window.setTimeout(() => strikeCathedralBell(82.41, 4.2, 0.85), 680);
+      this.activeChimeTimeouts.push(tid);
+      return;
+    }
+
+    // Hour strike: deep cathedral chord lead-in followed by low C2/E2 (82.41 Hz) tolling strikes
+    const safeCount = Math.max(1, Math.min(12, hourCount));
+    strikeCathedralBell(164.81, 3.8, 0.75); // E3
+    const leadId = window.setTimeout(() => strikeCathedralBell(123.47, 4.2, 0.82), 650); // B2
+    this.activeChimeTimeouts.push(leadId);
+
+    const strikeOffsetSec = 1.6;
+    const strikeIntervalSec = 2.5;
+    for (let i = 0; i < safeCount; i++) {
+      const tid = window.setTimeout(() => {
+        strikeCathedralBell(82.41, 5.2, 1.0); // Deep E2 cathedral bourdon bell
+      }, (strikeOffsetSec + i * strikeIntervalSec) * 1000);
+      this.activeChimeTimeouts.push(tid);
+    }
+  }
+
+  /**
    * Top of the hour hook: dispatches theme-adaptive hour chime
    */
   public onHour(hour: number): void {
@@ -784,6 +929,9 @@ export class ClockAudioEngine {
     if (this.activeProfile === 'vienna_classic') {
       const count = hour % 12 || 12;
       this.playHourStrikes(count);
+    } else if (this.activeProfile === 'tourbillon_3d') {
+      const count = hour % 12 || 12;
+      this.playCathedralChime(true, count);
     } else if (this.activeProfile === 'nixie_hybrid') {
       this.playNixieBrassGlassChime(true);
     } else if (this.activeProfile === 'hybrid_base') {
@@ -811,6 +959,8 @@ export class ClockAudioEngine {
         }, p * 2200);
         this.activeChimeTimeouts.push(timerId);
       }
+    } else if (this.activeProfile === 'tourbillon_3d') {
+      this.playCathedralChime(false);
     } else if (this.activeProfile === 'nixie_hybrid') {
       this.playNixieBrassGlassChime(false);
     } else if (this.activeProfile === 'hybrid_base') {
@@ -941,7 +1091,7 @@ export class ClockAudioEngine {
       return;
     }
 
-    if (this.activeProfile === 'vienna_classic') {
+    if (this.activeProfile === 'vienna_classic' || this.activeProfile === 'tourbillon_3d') {
       if (isUrgent) {
         // Ascending 3-tone brass chime: E5 -> G#5 -> B5
         this.playBellTone(659.25, 2.2, 0.7);

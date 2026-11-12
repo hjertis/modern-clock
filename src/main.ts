@@ -144,6 +144,8 @@ async function bootstrap() {
       themePillLabel.textContent = '🎛️ Hybrid Analog/Digital (T)';
     } else if (themeId === 'nixie_hybrid') {
       themePillLabel.textContent = '🔥 Nixie Chronograph (T)';
+    } else if (themeId === 'tourbillon_3d') {
+      themePillLabel.textContent = '⚙️ Horological Tourbillon 3D (T)';
     } else {
       themePillLabel.textContent = '🕰️ Vienna Classic (T)';
     }

@@ -11,6 +11,7 @@ export type ThemeId =
   | 'pcb_2049_emerald'
   | 'hybrid_base'
   | 'nixie_hybrid'
+  | 'tourbillon_3d'
   | string;
 
 export interface ThemeConfig {

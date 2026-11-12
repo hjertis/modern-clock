@@ -33,6 +33,11 @@
   box-shadow: 0 20px 80px rgba(0, 0, 0, 0.95), 0 0 1px 1px rgba(244, 196, 98, 0.18);
 }
 
+#clock-stage[data-theme="tourbillon_3d"] {
+  background: #0c0705;
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.98), 0 0 1px 1px rgba(217, 168, 78, 0.22);
+}
+
 
 /* Layered DOM Hierarchy */
 .clock-layer {

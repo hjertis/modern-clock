@@ -4,6 +4,7 @@ import { ViennaClassicTheme } from './viennaClassic';
 import { Pcb2049Theme } from './pcb2049';
 import { HybridBaseTheme } from './hybrid_base';
 import { NixieHybridTheme } from './nixie_hybrid';
+import { Tourbillon3DTheme } from './tourbillon_3d';
 import { ClockAudioEngine } from '../core/audioEngine';
 
 export type ThemeFactory = () => Theme;
@@ -53,6 +54,7 @@ export class ThemeManager {
     this.registerTheme(() => new Pcb2049Theme('emerald'));
     this.registerTheme(() => new HybridBaseTheme());
     this.registerTheme(() => new NixieHybridTheme());
+    this.registerTheme(() => new Tourbillon3DTheme());
   }
 
 
@@ -163,6 +165,14 @@ export class ThemeManager {
       cleaned === 'nixie_chronograph'
     ) {
       return 'nixie_hybrid';
+    }
+    if (
+      cleaned === 'tourbillon' ||
+      cleaned === 'tourbillon_3d' ||
+      cleaned === 'horological_tourbillon' ||
+      cleaned === 'horological_tourbillon_3d'
+    ) {
+      return 'tourbillon_3d';
     }
 
     // Match by display name

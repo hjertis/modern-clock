@@ -10,6 +10,7 @@ import {
 import { ThemeManager } from '../src/themes/themeManager';
 import { HybridBaseTheme, HYBRID_DIGITAL_CELL_SLOTS } from '../src/themes/hybrid_base';
 import { NixieHybridTheme } from '../src/themes/nixie_hybrid';
+import { Tourbillon3DTheme, computeCounterweightProgress } from '../src/themes/tourbillon_3d';
 import { ClockAudioEngine } from '../src/core/audioEngine';
 import { ClockEngine } from '../src/core/clockEngine';
 import { ClockWebSocketClient } from '../src/core/wsClient';
@@ -48,6 +49,10 @@ function createMockCanvasContext(): CanvasRenderingContext2D {
     rotate: () => {},
     scale: () => {},
     setTransform: () => {},
+    setLineDash: () => {},
+    bezierCurveTo: () => {},
+    quadraticCurveTo: () => {},
+    ellipse: () => {},
     drawImage: () => {},
     createLinearGradient: () => ({ addColorStop: () => {} }),
     createRadialGradient: () => ({ addColorStop: () => {} }),
@@ -526,8 +531,140 @@ async function runHybridBaseTests() {
 
   console.log('✓ Test 5 Passed: Nixie Hybrid IN-18 matrix, 1.8s cathode anti-poisoning sweep, IN-13 bargraph & audio profile');
 
+  // 6. Tourbillon 3D (`tourbillon_3d`), ThreeStage Disposal, Multi-Plane Gears, Counterweights & Modes
+  console.log('Test 6: Horological Tourbillon 3D (`tourbillon_3d`), ThreeStage & Mechanical Architecture');
+  assert(availableIds.includes('tourbillon_3d'), 'tourbillon_3d must be registered in ThemeManager');
+  const tourbillonDescriptor = availableDescriptors.find((d) => d.id === 'tourbillon_3d');
+  assert(tourbillonDescriptor !== undefined);
+  assert.strictEqual(tourbillonDescriptor!.name, 'Horological Tourbillon 3D');
+
+  assert.strictEqual(themeManager.resolveThemeId('tourbillon_3d'), 'tourbillon_3d');
+  assert.strictEqual(themeManager.resolveThemeId('tourbillon'), 'tourbillon_3d');
+  assert.strictEqual(themeManager.resolveThemeId('Horological Tourbillon 3D'), 'tourbillon_3d');
+
+  const mountedTourbillon = (await themeManager.setTheme('tourbillon_3d', {
+    animateTransition: false
+  })) as Tourbillon3DTheme;
+  assert.strictEqual(mountedTourbillon.id, 'tourbillon_3d');
+  assert.strictEqual(mountedTourbillon.name, 'Horological Tourbillon 3D');
+  assert.strictEqual(audio.getSoundProfile(), 'tourbillon_3d');
+
+  const threeStage = mountedTourbillon.getThreeStage();
+  assert(threeStage !== null, 'ThreeStage must be initialized on mount');
+  assert.strictEqual(threeStage!.width, 1080);
+  assert.strictEqual(threeStage!.height, 1920);
+  assert.strictEqual(threeStage!.fov, 30);
+
+  const activeStats = threeStage!.getResourceStats();
+  assert(activeStats.geometries > 15, 'ThreeStage must track scene geometries');
+  assert(activeStats.materials > 8, 'ThreeStage must track scene materials');
+  assert(
+    activeStats.textures >= 4,
+    'ThreeStage must track walnut diffuse/normal/roughness & PMREM studio textures'
+  );
+  assert.strictEqual(activeStats.disposed, false);
+
+  // Render frame in active mode and check multi-plane gears, 2.5 Hz tourbillon, and lyre pendulum
+  const midWeekTime = new Date(2026, 10, 11, 14, 25, 30, 100); // Wednesday afternoon
+  const midWeekTick = formatSynchronizedTime(
+    midWeekTime,
+    { hourFormat: '24h', showSeconds: true, showDate: true },
+    'sweep'
+  );
+  mountedTourbillon.renderPendulum(mockCtx, {
+    angleDeg: 5.0,
+    angleRad: (5.0 * Math.PI) / 180,
+    angularVelocityNorm: 0.5,
+    angularVelocityRad: 0.1,
+    phase: 0.1,
+    phaseRad: 0.62,
+    periodSeconds: 2.0,
+    maxAngleDeg: 6.0,
+    dampingFactor: 1.0,
+    dimmed: false,
+    pivot: { x: 540, y: 860 },
+    timeSec: 25.1
+  });
+  mountedTourbillon.renderDial(mockCtx, {
+    date: midWeekTime,
+    hours: 14,
+    minutes: 25,
+    seconds: 30,
+    milliseconds: 100,
+    angles: midWeekTick.angles,
+    secondMode: 'sweep',
+    timestampMs: midWeekTime.getTime(),
+    realTimeMs: 3000,
+    deltaTimeSec: 0.1,
+    displayOptions: midWeekTick.options,
+    digitalTick: midWeekTick
+  });
+
+  const debugActive = mountedTourbillon.getDebugState();
+  // Verify 4 distinct Z-planes for the beveled gear train
+  assert.strictEqual(debugActive.gearPlaneZ.length, 4);
+  assert.notStrictEqual(debugActive.gearPlaneZ[0], debugActive.gearPlaneZ[1]);
+  assert.notStrictEqual(debugActive.gearPlaneZ[1], debugActive.gearPlaneZ[2]);
+  assert.notStrictEqual(debugActive.gearPlaneZ[2], debugActive.gearPlaneZ[3]);
+  // Verify tilted inner tourbillon gimbal axes (20 deg - 35 deg)
+  assert(debugActive.tourbillonTiltDeg[0] >= 20 && debugActive.tourbillonTiltDeg[0] <= 35);
+  assert(debugActive.tourbillonTiltDeg[1] >= 20 && debugActive.tourbillonTiltDeg[1] <= 35);
+  // Verify breathing camera parallax sway & bloom threshold (1.45)
+  assert(Math.abs(debugActive.cameraPosition[0]) > 0.01 || Math.abs(debugActive.cameraPosition[1]) > 0.01);
+  assert.strictEqual(debugActive.bloomThreshold, 1.45);
+  assert(debugActive.rubyEmissiveIntensity >= 2.5, 'Ruby bearings should glow with emissiveIntensity >= 2.5');
+  assert(debugActive.spotlightIntensity > 50, 'Active mode spotlight should be bright');
+  assert(Math.abs(debugActive.pendulumAngleRad) > 0.05, 'Lyre pendulum should swing in active mode');
+
+  // Counterweights: Saturday night is near bottom (~1.0), Sunday 00:00:30 is mid-rewind (~0.5), Sunday 00:01:00 is rewound (0.0)
+  const satNight = new Date(2026, 10, 14, 23, 55, 0, 0); // Saturday 23:55
+  const sunMidnightStart = new Date(2026, 10, 15, 0, 0, 0, 0); // Sunday 00:00:00
+  const sunMidnightMid = new Date(2026, 10, 15, 0, 0, 30, 0); // Sunday 00:00:30
+  const sunMidnightDone = new Date(2026, 10, 15, 0, 1, 0, 0); // Sunday 00:01:00
+  assert(computeCounterweightProgress(satNight) > 0.99);
+  assert(Math.abs(computeCounterweightProgress(sunMidnightStart) - 1.0) < 1e-6);
+  assert(Math.abs(computeCounterweightProgress(sunMidnightMid) - 0.5) < 1e-6);
+  assert(Math.abs(computeCounterweightProgress(sunMidnightDone) - 0.0) < 1e-6);
+
+  // Night mode dims spotlight and index glow
+  mountedTourbillon.onEvent({ type: 'mode_change', payload: { mode: 'night' } });
+  const debugNight = mountedTourbillon.getDebugState();
+  assert(debugNight.spotlightIntensity < debugActive.spotlightIntensity * 0.4);
+  assert(debugNight.indexEmissiveIntensity < debugActive.indexEmissiveIntensity);
+
+  // Sleep mode smoothly brakes tourbillon cage and pendulum to rest
+  mountedTourbillon.onEvent({ type: 'mode_change', payload: { mode: 'sleep' } });
+  mountedTourbillon.renderPendulum(mockCtx, {
+    angleDeg: 0,
+    angleRad: 0,
+    angularVelocityNorm: 0,
+    angularVelocityRad: 0,
+    phase: 0,
+    phaseRad: 0,
+    periodSeconds: 2.0,
+    maxAngleDeg: 6.0,
+    dampingFactor: 0.0,
+    dimmed: false,
+    pivot: { x: 540, y: 860 },
+    timeSec: 0
+  });
+  const debugSleep = mountedTourbillon.getDebugState();
+  assert.strictEqual(debugSleep.brakeFactor, 0);
+  assert.strictEqual(debugSleep.pendulumAngleRad, 0);
+
+  // Switching away from tourbillon_3d disposes all geometries, materials, textures, and render targets
+  await themeManager.setTheme('pcb_2049', { animateTransition: false });
+  const disposedStats = threeStage!.getResourceStats();
+  assert.strictEqual(disposedStats.disposed, true);
+  assert.strictEqual(disposedStats.geometries, 0);
+  assert.strictEqual(disposedStats.materials, 0);
+  assert.strictEqual(disposedStats.textures, 0);
+  assert.strictEqual(disposedStats.renderTargets, 0);
+
+  console.log('✓ Test 6 Passed: Tourbillon 3D, ThreeStage disposal, multi-plane gears, counterweights & modes');
+
   console.log('==================================================');
-  console.log('🎉 ALL HYBRID & NIXIE TESTS PASSED! (5/5 Test Suites)');
+  console.log('🎉 ALL HYBRID, NIXIE & TOURBILLON 3D TESTS PASSED! (6/6 Test Suites)');
   console.log('==================================================');
 }
 
