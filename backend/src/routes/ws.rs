@@ -33,11 +33,13 @@ async fn handle_ws_client(socket: WebSocket, state: AppState) {
     // Send initial connection welcome with current clock config
     {
         let cfg = state.config.read().await.clone();
+        let themes = state.available_themes.read().await.clone();
         let init_msg = json!({
             "type": "init",
             "connected": true,
             "version": env!("CARGO_PKG_VERSION"),
-            "config": cfg
+            "config": cfg,
+            "availableThemes": themes
         });
         if let Ok(json_str) = serde_json::to_string(&init_msg) {
             let _ = ws_sender.send(Message::Text(json_str)).await;
@@ -90,6 +92,7 @@ async fn handle_ws_client(socket: WebSocket, state: AppState) {
                     }
                     Some(Ok(Message::Text(text))) => {
                         debug!(text = %text, "Received message from WebSocket client");
+                        handle_client_text_message(&state, &text).await;
                     }
                     Some(Ok(Message::Close(close_frame))) => {
                         debug!(frame = ?close_frame, "Client cleanly closed WebSocket connection");
@@ -113,4 +116,41 @@ async fn handle_ws_client(socket: WebSocket, state: AppState) {
 
     let remaining = state.active_ws_clients.fetch_sub(1, Ordering::Relaxed) - 1;
     info!(total_clients = remaining, "WebSocket client disconnected");
+}
+
+async fn handle_client_text_message(state: &AppState, text: &str) {
+    if let Ok(val) = serde_json::from_str::<serde_json::Value>(text) {
+        let msg_type = val.get("type").and_then(|t| t.as_str()).unwrap_or("");
+        if msg_type == "register_themes" {
+            let mut extracted_themes = Vec::new();
+            if let Some(themes_array) = val.get("themes").and_then(|t| t.as_array()) {
+                for item in themes_array {
+                    if let Some(s) = item.as_str() {
+                        let trimmed = s.trim();
+                        if !trimmed.is_empty() {
+                            extracted_themes.push(trimmed.to_string());
+                        }
+                    } else if let Some(id) = item.get("id").and_then(|i| i.as_str()) {
+                        let trimmed = id.trim();
+                        if !trimmed.is_empty() {
+                            extracted_themes.push(trimmed.to_string());
+                        }
+                    }
+                }
+            }
+
+            if !extracted_themes.is_empty() {
+                info!(count = extracted_themes.len(), themes = ?extracted_themes, "Registering themes from client");
+                state.update_available_themes(extracted_themes).await;
+            }
+
+            if let Some(active) = val.get("activeTheme").and_then(|a| a.as_str()) {
+                let trimmed = active.trim();
+                if !trimmed.is_empty() {
+                    let mut c = state.config.write().await;
+                    c.theme = trimmed.to_string();
+                }
+            }
+        }
+    }
 }

@@ -101,7 +101,17 @@ export type BackendIncomingMessage =
   | WakeActionMessage;
 
 export class ClockWebSocketClient {
-  public static readonly DEFAULT_WS_URL = 'ws://192.168.0.69:8088/ws';
+  public static getDefaultWsUrl(): string {
+    if (typeof window !== 'undefined' && window.location?.host) {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${proto}//${window.location.host}/ws`;
+    }
+    return 'ws://127.0.0.1:8088/ws';
+  }
+
+  public static get DEFAULT_WS_URL(): string {
+    return ClockWebSocketClient.getDefaultWsUrl();
+  }
 
   private url: string;
   private socket: WebSocket | null = null;
@@ -131,13 +141,29 @@ export class ClockWebSocketClient {
       this.setSleepManager(options.sleepManager);
     }
 
-    // Priority: Explicit option -> URL query param ?ws= -> Default
+    if (options.themeManager) {
+      this.setThemeManager(options.themeManager);
+    }
+
+    // Priority: Explicit option -> URL query param ?ws= -> VITE_WS_URL -> Dynamic default
     const queryWs =
       typeof window !== 'undefined'
         ? new URLSearchParams(window.location.search).get('ws')
         : null;
 
-    this.url = options.url || queryWs || ClockWebSocketClient.DEFAULT_WS_URL;
+    const envWs =
+      typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_WS_URL
+        ? (import.meta.env.VITE_WS_URL as string)
+        : null;
+
+    const proto =
+      typeof window !== 'undefined' && window.location?.protocol === 'https:' ? 'wss:' : 'ws:';
+    const defaultWsUrl =
+      typeof window !== 'undefined' && window.location?.host
+        ? `${proto}//${window.location.host}/ws`
+        : 'ws://127.0.0.1:8088/ws';
+
+    this.url = options.url || queryWs || envWs || defaultWsUrl;
   }
 
   /**
@@ -229,6 +255,40 @@ export class ClockWebSocketClient {
 
   public getSleepManager(): SleepManager | undefined {
     return this.sleepManager;
+  }
+
+  public setThemeManager(themeManager: ThemeManager): void {
+    this.themeManager = themeManager;
+    themeManager.onThemeRegistryChange(() => {
+      this.broadcastThemesRegistration();
+    });
+    themeManager.onThemeChange(() => {
+      this.broadcastThemesRegistration();
+    });
+  }
+
+  public getThemeManager(): ThemeManager | undefined {
+    return this.themeManager;
+  }
+
+  /**
+   * Broadcasts the list of registered frontend themes to the backend daemon
+   * so Home Assistant dynamic MQTT discovery stays fully synchronized.
+   */
+  public broadcastThemesRegistration(): void {
+    if (!this.isConnected() || !this.themeManager) return;
+    const themes = this.themeManager.getAvailableThemeIds();
+    const activeTheme = this.themeManager.getActiveThemeId();
+    const metadata = this.themeManager.getAvailableThemes();
+    const payload = {
+      type: 'register_themes',
+      themes,
+      activeTheme,
+      metadata,
+      timestamp: new Date().toISOString()
+    };
+    console.log('[Clock WS] Registering available themes with backend:', payload);
+    this.send(payload);
   }
 
   /**
@@ -359,6 +419,20 @@ export class ClockWebSocketClient {
       return;
     }
 
+    // 6. Handle `{ "action": "test_chime" }` or `{ "action": "chime" }`
+    if (
+      ('action' in msg &&
+        (msg.action === 'test_chime' || msg.action === 'chime' || msg.action === 'play_chime')) ||
+      ('type' in msg && (msg.type === 'test_chime' || msg.type === 'chime'))
+    ) {
+      console.log('[Clock WS] Remote test chime received.');
+      if (this.audioEngine) {
+        this.audioEngine.unlock();
+        this.audioEngine.onHour(new Date().getHours());
+      }
+      return;
+    }
+
     const typedMsg = msg as BackendIncomingMessage;
     if (!('type' in typedMsg)) return;
 
@@ -464,6 +538,9 @@ export class ClockWebSocketClient {
 
     // Broadcast current mode & schedule state immediately on link establishment
     this.broadcastModeState();
+
+    // Broadcast registered theme list to backend for dynamic Home Assistant discovery
+    this.broadcastThemesRegistration();
 
     if (!this.initialConnectedNotified) {
       this.initialConnectedNotified = true;

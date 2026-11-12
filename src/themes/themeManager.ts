@@ -24,6 +24,7 @@ export class ThemeManager {
   private notificationZoneElement: HTMLElement | null;
 
   private themeChangeListeners: Array<(theme: Theme, manifest: ThemeManifest | null) => void> = [];
+  private themeRegistryListeners: Array<(themes: ThemeDescriptor[]) => void> = [];
   private isTransitioning = false;
 
   constructor(
@@ -63,6 +64,21 @@ export class ThemeManager {
       descriptor: { id: sample.id, name: sample.name },
       create: factory
     });
+
+    for (const listener of this.themeRegistryListeners) {
+      try {
+        listener(this.getAvailableThemes());
+      } catch (err) {
+        console.error('[ThemeManager] Error notifying theme registry listener:', err);
+      }
+    }
+  }
+
+  public onThemeRegistryChange(listener: (themes: ThemeDescriptor[]) => void): () => void {
+    this.themeRegistryListeners.push(listener);
+    return () => {
+      this.themeRegistryListeners = this.themeRegistryListeners.filter((l) => l !== listener);
+    };
   }
 
   public setAudioEngine(audioEngine: ClockAudioEngine): void {
@@ -76,6 +92,10 @@ export class ThemeManager {
 
   public getAvailableThemes(): ThemeDescriptor[] {
     return Array.from(this.registry.values()).map((entry) => entry.descriptor);
+  }
+
+  public getAvailableThemeIds(): string[] {
+    return Array.from(this.registry.keys());
   }
 
   public getActiveTheme(): Theme | null {

@@ -747,7 +747,7 @@ function drawEmeraldMidSectionGridAndBridge(ctx: CanvasRenderingContext2D): void
 
   ctx.font = 'bold 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
   ctx.fillStyle = 'rgba(232, 226, 208, 0.75)';
-  ctx.fillText('DAEMON: 192.168.0.69:8088/ws (CONNECTED)', 124, 948);
+  ctx.fillText('DAEMON: /ws (CONNECTED)', 124, 948);
   ctx.fillStyle = PCB_COLORS.SILKSCREEN_AMBER;
   ctx.fillText('STATUS: ACTIVE // PENDULUM SYNC NOMINAL', 124, 968);
 

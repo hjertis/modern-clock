@@ -124,7 +124,7 @@ export class PcbHudOverlay {
     // 1. Render active high-speed electron packets along lateral trace buses
     this.renderElectronPackets(ctx, now);
 
-    // 2. Render Left Telemetry Panel: Backend Daemon Connection (192.168.0.69:8088/ws)
+    // 2. Render Left Telemetry Panel: Backend Daemon Connection (/ws)
     this.renderDaemonTelemetryPanel(ctx, telemetryData);
 
     // 3. Render Right Telemetry Panel: Pendulum Phase, Harmonic Waveform & FPS
@@ -206,8 +206,8 @@ export class PcbHudOverlay {
     // Translucent PCB HUD module enclosure with 45-degree chamfered corner
     this.drawHudModuleBox(ctx, x, y, w, h, 'U_NET // DAEMON_TELEMETRY');
 
-    // Clean display endpoint (e.g. 192.168.0.69:8088/ws)
-    const cleanEndpoint = (telemetry.wsUrl || 'ws://192.168.0.69:8088/ws').replace(/^wss?:\/\//, '');
+    // Clean display endpoint (e.g. host:8088/ws)
+    const cleanEndpoint = (telemetry.wsUrl || 'ws').replace(/^wss?:\/\//, '');
 
     // Status LED SMD Indicator Pad
     let ledColor: string = PCB_COLORS.ENIG_GOLD;

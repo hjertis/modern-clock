@@ -399,8 +399,55 @@ async function runTests() {
 
   console.log('✓ Test 8 Passed: WebSocket set_mode, set_schedule, wake, and state broadcasting');
 
+  // --- Test 9: Frontend Theme Registry Handshake ---
+  console.log('Test 9: Frontend Theme Registry Handshake');
+  const mockThemes: Array<{ id: string; name: string }> = [
+    { id: 'vienna_classic', name: 'Vienna Classic' },
+    { id: 'pcb_2049', name: 'PCB-2049' },
+    { id: 'pcb_2049_emerald', name: 'Silicon Master // Rev B' },
+  ];
+  let registryChangeCallback: ((themes: Array<{ id: string; name: string }>) => void) | null = null;
+  const mockThemeManager = {
+    getAvailableThemeIds: () => mockThemes.map((t) => t.id),
+    getAvailableThemes: () => [...mockThemes],
+    getActiveThemeId: () => 'pcb_2049',
+    onThemeRegistryChange: (cb: (themes: Array<{ id: string; name: string }>) => void) => {
+      registryChangeCallback = cb;
+      return () => {};
+    },
+    onThemeChange: () => () => {},
+  };
+
+  wsClient.setThemeManager(mockThemeManager as any);
+  assert.strictEqual(wsClient.getThemeManager(), mockThemeManager as any);
+
+  // Trigger broadcast
+  const prevCount = mockWsMessages.length;
+  wsClient.broadcastThemesRegistration();
+  assert.strictEqual(mockWsMessages.length, prevCount + 1);
+  const themeRegMsg = mockWsMessages[mockWsMessages.length - 1];
+  assert.strictEqual(themeRegMsg.type, 'register_themes');
+  assert.deepStrictEqual(themeRegMsg.themes, ['vienna_classic', 'pcb_2049', 'pcb_2049_emerald']);
+  assert.strictEqual(themeRegMsg.activeTheme, 'pcb_2049');
+
+  // Register dynamic theme at runtime
+  mockThemes.push({ id: 'steampunk_brass', name: 'Steampunk Brass' });
+  if (registryChangeCallback) {
+    (registryChangeCallback as (t: Array<{ id: string; name: string }>) => void)(mockThemes);
+  }
+  assert.strictEqual(mockWsMessages.length, prevCount + 2);
+  const dynamicRegMsg = mockWsMessages[mockWsMessages.length - 1];
+  assert.strictEqual(dynamicRegMsg.type, 'register_themes');
+  assert.deepStrictEqual(dynamicRegMsg.themes, [
+    'vienna_classic',
+    'pcb_2049',
+    'pcb_2049_emerald',
+    'steampunk_brass'
+  ]);
+  console.log('✓ Test 9 Passed: Frontend Theme Registry handshake & dynamic runtime registration');
+
   console.log('==================================================');
-  console.log('🎉 ALL TESTS PASSED SUCCESSFULLY! (8/8 Test Suites)');
+  console.log('🎉 ALL TESTS PASSED SUCCESSFULLY! (9/9 Test Suites)');
   console.log('==================================================');
 }
 

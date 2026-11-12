@@ -46,7 +46,7 @@ export class ClockEngine {
   private smoothedFps = 60.0;
   private smoothedFrameTimeMs = 16.67;
   private wsStatus: WSStatus = 'disconnected';
-  private wsUrl = 'ws://192.168.0.69:8088/ws';
+  private wsUrl = '';
   private showDebugGrid = false;
   private activeNotificationsProvider: () => number = () => 0;
 

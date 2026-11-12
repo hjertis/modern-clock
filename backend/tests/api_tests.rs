@@ -159,3 +159,116 @@ async fn test_config_endpoint() {
     assert_eq!(current_json["theme"], "pcb-2049");
 }
 
+#[tokio::test]
+async fn test_static_files_and_fallback() {
+    let temp_dir = std::env::temp_dir().join(format!("clock_test_{}", std::process::id()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let index_file = temp_dir.join("index.html");
+    std::fs::write(&index_file, "<html><body>Grandfather Clock</body></html>").unwrap();
+    let asset_file = temp_dir.join("test.js");
+    std::fs::write(&asset_file, "console.log('test');").unwrap();
+
+    std::env::set_var("STATIC_DIR", temp_dir.to_str().unwrap());
+
+    let state = AppState::new();
+    let app = create_router(state);
+
+    // Test GET /
+    let res_root = app
+        .clone()
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res_root.status(), StatusCode::OK);
+    let body = res_root.into_body().collect().await.unwrap().to_bytes();
+    assert!(String::from_utf8_lossy(&body).contains("Grandfather Clock"));
+
+    // Test GET /test.js
+    let res_asset = app
+        .clone()
+        .oneshot(Request::builder().uri("/test.js").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res_asset.status(), StatusCode::OK);
+    let body = res_asset.into_body().collect().await.unwrap().to_bytes();
+    assert!(String::from_utf8_lossy(&body).contains("console.log('test')"));
+
+    // Test fallback for unknown route /some/spa/route
+    let res_fallback = app
+        .oneshot(Request::builder().uri("/some/spa/route").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res_fallback.status(), StatusCode::OK);
+    let body = res_fallback.into_body().collect().await.unwrap().to_bytes();
+    assert!(String::from_utf8_lossy(&body).contains("Grandfather Clock"));
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[tokio::test]
+async fn test_dynamic_ha_discovery_theme_options() {
+    use grandfather_clock_backend::mqtt::build_ha_theme_select_payload;
+
+    let state = AppState::new();
+
+    // 1. Verify default themes in state
+    {
+        let themes = state.available_themes.read().await;
+        assert_eq!(*themes, vec!["vienna_classic", "pcb_2049", "pcb_2049_emerald"]);
+    }
+
+    // 2. Verify initial discovery payload options
+    let prefix = "test_clock";
+    let initial_payload = {
+        let themes = state.available_themes.read().await;
+        build_ha_theme_select_payload(prefix, &themes)
+    };
+
+    assert_eq!(
+        initial_payload["options"],
+        serde_json::json!(["vienna_classic", "pcb_2049", "pcb_2049_emerald"])
+    );
+    assert_eq!(initial_payload["command_topic"], "test_clock/theme/set");
+    assert_eq!(initial_payload["state_topic"], "test_clock/theme/state");
+    assert_eq!(initial_payload["unique_id"], "test_clock_theme");
+
+    // 3. Receive dynamic theme list registration (e.g. from frontend client)
+    let new_themes = vec![
+        "vienna_classic".to_string(),
+        "pcb_2049".to_string(),
+        "pcb_2049_emerald".to_string(),
+        "steampunk_brass".to_string(),
+        "cyberpunk_neon".to_string(),
+    ];
+
+    let changed = state.update_available_themes(new_themes.clone()).await;
+    assert!(changed);
+
+    // Verify state was updated
+    {
+        let themes = state.available_themes.read().await;
+        assert_eq!(*themes, new_themes);
+    }
+
+    // 4. Verify updated discovery payload has new options
+    let updated_payload = {
+        let themes = state.available_themes.read().await;
+        build_ha_theme_select_payload(prefix, &themes)
+    };
+
+    assert_eq!(
+        updated_payload["options"],
+        serde_json::json!([
+            "vienna_classic",
+            "pcb_2049",
+            "pcb_2049_emerald",
+            "steampunk_brass",
+            "cyberpunk_neon"
+        ])
+    );
+
+    // 5. Duplicate call should return false (no-op when list unchanged)
+    let unchanged = state.update_available_themes(new_themes).await;
+    assert!(!unchanged);
+}
+
