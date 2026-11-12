@@ -20,7 +20,7 @@ RUN npm run build
 # ==============================================================================
 # Stage 2: Build Rust Backend Daemon
 # ==============================================================================
-FROM rust:1.83-slim-bookworm AS backend-builder
+FROM rust:slim-bookworm AS backend-builder
 WORKDIR /build
 
 # Install system dependencies needed for compiling native crates
@@ -35,7 +35,12 @@ RUN mkdir -p src \
     && echo "pub fn dummy() {}" > src/lib.rs \
     && echo "fn main() {}" > src/main.rs \
     && cargo build --release \
-    && rm -rf src target/release/deps/grandfather_clock_backend* target/release/grandfather-clock-backend*
+    && rm -rf src \
+       target/release/.fingerprint/grandfather-clock-backend* \
+       target/release/deps/grandfather_clock_backend* \
+       target/release/deps/grandfather-clock-backend* \
+       target/release/libgrandfather_clock_backend* \
+       target/release/grandfather-clock-backend*
 
 # Copy actual Rust backend source files and compile release binary
 COPY backend/src/ ./src/
