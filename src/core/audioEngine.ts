@@ -35,7 +35,9 @@ export type SoundProfile =
   | 'pcb_2049_emerald'
   | 'hybrid_base'
   | 'nixie_hybrid'
-  | 'tourbillon_3d';
+  | 'tourbillon_3d'
+  | 'reactor_3d'
+  | 'orrery_3d';
 
 export class ClockAudioEngine {
   private ctx: AudioContext | null = null;
@@ -158,6 +160,21 @@ export class ClockAudioEngine {
     ) {
       this.activeProfile = 'tourbillon_3d';
     } else if (
+      clean === 'reactor_3d' ||
+      clean === 'reactor' ||
+      clean === 'chrono_containment_reactor' ||
+      clean === 'chrono_reactor'
+    ) {
+      this.activeProfile = 'reactor_3d';
+    } else if (
+      clean === 'orrery_3d' ||
+      clean === 'orrery' ||
+      clean === 'celestial_astrolabe' ||
+      clean === 'celestial_orrery' ||
+      clean === 'celestial_astrolabe_&_orrery'
+    ) {
+      this.activeProfile = 'orrery_3d';
+    } else if (
       clean === 'nixie_hybrid' ||
       clean === 'nixie' ||
       clean === 'nixie_chronograph'
@@ -217,6 +234,10 @@ export class ClockAudioEngine {
       this.playViennaEscapement(isTick);
     } else if (this.activeProfile === 'tourbillon_3d') {
       this.playTourbillonEscapement(isTick);
+    } else if (this.activeProfile === 'reactor_3d') {
+      this.playReactorEscapement(isTick);
+    } else if (this.activeProfile === 'orrery_3d') {
+      this.playOrreryEscapement(isTick);
     } else if (this.activeProfile === 'nixie_hybrid') {
       this.playNixieReedEscapement(isTick);
     } else if (this.activeProfile === 'hybrid_base') {
@@ -920,6 +941,279 @@ export class ClockAudioEngine {
   }
 
   /**
+   * Reactor 3D: Crisp high-voltage vacuum relay tick + copper busbar ring + magnetic coil thump.
+   */
+  private playReactorEscapement(isTick: boolean): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const masterGain = this.ctx.createGain();
+    masterGain.gain.setValueAtTime(this.volume * 0.42, t);
+    masterGain.connect(this.ctx.destination);
+
+    // 1. High-voltage vacuum contactor snap
+    const noiseBuffer = this.getNoiseBuffer();
+    if (noiseBuffer) {
+      const noiseSource = this.ctx.createBufferSource();
+      noiseSource.buffer = noiseBuffer;
+      noiseSource.loop = true;
+
+      const hpFilter = this.ctx.createBiquadFilter();
+      hpFilter.type = 'highpass';
+      hpFilter.frequency.setValueAtTime(isTick ? 4200 : 3500, t);
+      hpFilter.Q.setValueAtTime(2.2, t);
+
+      const clickGain = this.ctx.createGain();
+      const clickDur = 0.008;
+      clickGain.gain.setValueAtTime(isTick ? 0.78 : 0.64, t);
+      clickGain.gain.exponentialRampToValueAtTime(0.0001, t + clickDur);
+
+      noiseSource.connect(hpFilter);
+      hpFilter.connect(clickGain);
+      clickGain.connect(masterGain);
+
+      noiseSource.start(t, Math.random() * 1.5);
+      noiseSource.stop(t + clickDur + 0.004);
+    }
+
+    // 2. Metallic copper busbar transient ring
+    const ringOsc = this.ctx.createOscillator();
+    const ringGain = this.ctx.createGain();
+    ringOsc.type = 'sine';
+    ringOsc.frequency.setValueAtTime(isTick ? 2880 : 2340, t);
+    ringGain.gain.setValueAtTime(0.32, t);
+    ringGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.022);
+
+    ringOsc.connect(ringGain);
+    ringGain.connect(masterGain);
+    ringOsc.start(t);
+    ringOsc.stop(t + 0.026);
+
+    // 3. Low magnetic containment coil thump
+    const coilOsc = this.ctx.createOscillator();
+    const coilGain = this.ctx.createGain();
+    coilOsc.type = 'triangle';
+    coilOsc.frequency.setValueAtTime(isTick ? 145 : 118, t);
+    coilOsc.frequency.exponentialRampToValueAtTime(65, t + 0.042);
+
+    coilGain.gain.setValueAtTime(0.52, t);
+    coilGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
+
+    coilOsc.connect(coilGain);
+    coilGain.connect(masterGain);
+    coilOsc.start(t);
+    coilOsc.stop(t + 0.05);
+  }
+
+  /**
+   * Reactor 3D: Deep harmonic containment chime (tokamak sub-bass + fifth + FM Cherenkov overtones).
+   */
+  private playReactorContainmentChime(isHour: boolean, hourCount = 1): void {
+    if (
+      this.isMuted ||
+      !this.chimesEnabled ||
+      this.volume <= 0 ||
+      !this.ctx ||
+      this.ctx.state !== 'running'
+    )
+      return;
+
+    const triggerContainmentResonance = (baseFreq: number, durationSec: number, scale: number) => {
+      if (!this.ctx || this.isMuted || !this.chimesEnabled) return;
+      const now = this.ctx.currentTime;
+      const master = this.ctx.createGain();
+      master.gain.setValueAtTime(this.volume * scale * 0.42, now);
+      master.connect(this.ctx.destination);
+
+      const partials: Array<{ freq: number; gain: number; decay: number; type: OscillatorType }> = [
+        { freq: baseFreq, gain: 0.9, decay: durationSec, type: 'sine' }, // D2 / A2 sub-bass
+        { freq: baseFreq * 1.5, gain: 0.55, decay: durationSec * 0.9, type: 'triangle' }, // Fifth
+        { freq: 220.0, gain: 0.42, decay: durationSec * 0.78, type: 'sine' },
+        { freq: 329.63, gain: 0.28, decay: durationSec * 0.64, type: 'sine' },
+        { freq: 440.0, gain: 0.2, decay: durationSec * 0.52, type: 'sine' }
+      ];
+
+      for (const p of partials) {
+        const osc = this.ctx.createOscillator();
+        const mod = this.ctx.createOscillator();
+        const modGain = this.ctx.createGain();
+        const g = this.ctx.createGain();
+
+        osc.type = p.type;
+        osc.frequency.setValueAtTime(p.freq, now);
+
+        mod.type = 'sine';
+        mod.frequency.setValueAtTime(p.freq * 2.003, now);
+        modGain.gain.setValueAtTime(p.freq * 0.35, now);
+        modGain.gain.exponentialRampToValueAtTime(0.01, now + 0.55);
+
+        mod.connect(modGain);
+        modGain.connect(osc.frequency);
+
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.linearRampToValueAtTime(p.gain, now + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + p.decay);
+
+        osc.connect(g);
+        g.connect(master);
+
+        mod.start(now);
+        mod.stop(now + p.decay + 0.05);
+        osc.start(now);
+        osc.stop(now + p.decay + 0.05);
+      }
+    };
+
+    if (!isHour) {
+      triggerContainmentResonance(110.0, 3.2, 0.72); // A2 containment quarter pulse
+      return;
+    }
+
+    const safeCount = Math.max(1, Math.min(12, hourCount));
+    triggerContainmentResonance(110.0, 3.6, 0.78);
+    const tid = window.setTimeout(() => {
+      triggerContainmentResonance(73.42, 4.8, 0.95); // Deep D2 tokamak harmonic
+    }, 520);
+    this.activeChimeTimeouts.push(tid);
+
+    for (let i = 0; i < Math.min(3, safeCount); i++) {
+      const pulseId = window.setTimeout(() => {
+        triggerContainmentResonance(146.83, 2.8, 0.55); // D3 harmonic lock pulse
+      }, (1.8 + i * 1.4) * 1000);
+      this.activeChimeTimeouts.push(pulseId);
+    }
+  }
+
+  /**
+   * Orrery 3D: Crisp astronomical observatory regulator tick + warm brass meridian gear ring.
+   */
+  private playOrreryEscapement(isTick: boolean): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const masterGain = this.ctx.createGain();
+    masterGain.gain.setValueAtTime(this.volume * 0.4, t);
+    masterGain.connect(this.ctx.destination);
+
+    // 1. Precision chronometer impulse noise
+    const noiseBuffer = this.getNoiseBuffer();
+    if (noiseBuffer) {
+      const noiseSource = this.ctx.createBufferSource();
+      noiseSource.buffer = noiseBuffer;
+      noiseSource.loop = true;
+
+      const bpFilter = this.ctx.createBiquadFilter();
+      bpFilter.type = 'bandpass';
+      bpFilter.frequency.setValueAtTime(isTick ? 3450 : 2760, t);
+      bpFilter.Q.setValueAtTime(3.2, t);
+
+      const clickGain = this.ctx.createGain();
+      const clickDur = 0.012;
+      clickGain.gain.setValueAtTime(isTick ? 0.68 : 0.54, t);
+      clickGain.gain.exponentialRampToValueAtTime(0.0001, t + clickDur);
+
+      noiseSource.connect(bpFilter);
+      bpFilter.connect(clickGain);
+      clickGain.connect(masterGain);
+
+      noiseSource.start(t, Math.random() * 1.5);
+      noiseSource.stop(t + clickDur + 0.005);
+    }
+
+    // 2. Aged astronomical brass astrolabe ring resonance
+    const brassOsc = this.ctx.createOscillator();
+    const brassGain = this.ctx.createGain();
+    brassOsc.type = 'sine';
+    brassOsc.frequency.setValueAtTime(isTick ? 2420 : 1960, t);
+    brassGain.gain.setValueAtTime(0.28, t);
+    brassGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.032);
+
+    brassOsc.connect(brassGain);
+    brassGain.connect(masterGain);
+    brassOsc.start(t);
+    brassOsc.stop(t + 0.036);
+
+    // 3. Walnut observatory case low warmth
+    const woodOsc = this.ctx.createOscillator();
+    const woodGain = this.ctx.createGain();
+    woodOsc.type = 'triangle';
+    woodOsc.frequency.setValueAtTime(isTick ? 220 : 172, t);
+    woodOsc.frequency.exponentialRampToValueAtTime(88, t + 0.048);
+
+    woodGain.gain.setValueAtTime(0.46, t);
+    woodGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.052);
+
+    woodOsc.connect(woodGain);
+    woodGain.connect(masterGain);
+    woodOsc.start(t);
+    woodOsc.stop(t + 0.058);
+  }
+
+  /**
+   * Orrery 3D: Resonant astronomical observatory chime (glass celestial harmonics + deep brass gong).
+   */
+  private playOrreryObservatoryChime(isHour: boolean, hourCount = 1): void {
+    if (
+      this.isMuted ||
+      !this.chimesEnabled ||
+      this.volume <= 0 ||
+      !this.ctx ||
+      this.ctx.state !== 'running'
+    )
+      return;
+
+    const strikeObservatoryBell = (freq: number, durationSec: number, gainScale: number) => {
+      if (!this.ctx || this.isMuted || !this.chimesEnabled) return;
+      const now = this.ctx.currentTime;
+      const master = this.ctx.createGain();
+      master.gain.setValueAtTime(this.volume * gainScale * 0.42, now);
+      master.connect(this.ctx.destination);
+
+      const partials: Array<{ ratio: number; gain: number; decay: number; type: OscillatorType }> = [
+        { ratio: 0.5, gain: 0.52, decay: durationSec * 1.1, type: 'sine' },
+        { ratio: 1.0, gain: 0.9, decay: durationSec, type: 'sine' },
+        { ratio: 1.5, gain: 0.48, decay: durationSec * 0.85, type: 'sine' },
+        { ratio: 2.0, gain: 0.34, decay: durationSec * 0.72, type: 'triangle' },
+        { ratio: 3.12, gain: 0.22, decay: durationSec * 0.55, type: 'sine' }
+      ];
+
+      for (const p of partials) {
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = p.type;
+        osc.frequency.setValueAtTime(freq * p.ratio, now);
+
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.linearRampToValueAtTime(p.gain, now + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + p.decay);
+
+        osc.connect(g);
+        g.connect(master);
+        osc.start(now);
+        osc.stop(now + p.decay + 0.05);
+      }
+    };
+
+    if (!isHour) {
+      // Quarter-hour celestial triad: D4 -> A3
+      strikeObservatoryBell(293.66, 3.0, 0.68);
+      const tid = window.setTimeout(() => strikeObservatoryBell(220.0, 3.8, 0.82), 540);
+      this.activeChimeTimeouts.push(tid);
+      return;
+    }
+
+    const safeCount = Math.max(1, Math.min(12, hourCount));
+    strikeObservatoryBell(293.66, 3.4, 0.72); // D4
+    const leadId = window.setTimeout(() => strikeObservatoryBell(220.0, 4.0, 0.8), 520); // A3
+    this.activeChimeTimeouts.push(leadId);
+
+    for (let i = 0; i < Math.min(4, safeCount); i++) {
+      const tid = window.setTimeout(() => {
+        strikeObservatoryBell(146.83, 4.8, 0.96); // Deep D3 meridian gong
+      }, (1.45 + i * 2.1) * 1000);
+      this.activeChimeTimeouts.push(tid);
+    }
+  }
+
+  /**
    * Top of the hour hook: dispatches theme-adaptive hour chime
    */
   public onHour(hour: number): void {
@@ -932,6 +1226,12 @@ export class ClockAudioEngine {
     } else if (this.activeProfile === 'tourbillon_3d') {
       const count = hour % 12 || 12;
       this.playCathedralChime(true, count);
+    } else if (this.activeProfile === 'reactor_3d') {
+      const count = hour % 12 || 12;
+      this.playReactorContainmentChime(true, count);
+    } else if (this.activeProfile === 'orrery_3d') {
+      const count = hour % 12 || 12;
+      this.playOrreryObservatoryChime(true, count);
     } else if (this.activeProfile === 'nixie_hybrid') {
       this.playNixieBrassGlassChime(true);
     } else if (this.activeProfile === 'hybrid_base') {
@@ -961,6 +1261,10 @@ export class ClockAudioEngine {
       }
     } else if (this.activeProfile === 'tourbillon_3d') {
       this.playCathedralChime(false);
+    } else if (this.activeProfile === 'reactor_3d') {
+      this.playReactorContainmentChime(false);
+    } else if (this.activeProfile === 'orrery_3d') {
+      this.playOrreryObservatoryChime(false);
     } else if (this.activeProfile === 'nixie_hybrid') {
       this.playNixieBrassGlassChime(false);
     } else if (this.activeProfile === 'hybrid_base') {
@@ -1101,6 +1405,18 @@ export class ClockAudioEngine {
         // Pleasant two-tone brass chime: E5 -> B5
         this.playBellTone(659.25, 2.0, 0.65);
         setTimeout(() => this.playBellTone(987.77, 2.8, 0.8), 180);
+      }
+    } else if (this.activeProfile === 'reactor_3d') {
+      this.playTelemetryChirp(isUrgent ? 'urgent' : 'normal', false);
+      if (isUrgent) {
+        this.playReactorContainmentChime(false);
+      }
+    } else if (this.activeProfile === 'orrery_3d') {
+      if (isUrgent) {
+        this.playOrreryObservatoryChime(false);
+      } else {
+        this.playBellTone(587.33, 2.2, 0.72);
+        setTimeout(() => this.playBellTone(880.0, 2.8, 0.8), 160);
       }
     } else {
       const isEmerald = this.activeProfile === 'pcb_2049_emerald';

@@ -12,6 +12,8 @@ export type ThemeId =
   | 'hybrid_base'
   | 'nixie_hybrid'
   | 'tourbillon_3d'
+  | 'reactor_3d'
+  | 'orrery_3d'
   | string;
 
 export interface ThemeConfig {

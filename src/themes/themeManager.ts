@@ -5,6 +5,8 @@ import { Pcb2049Theme } from './pcb2049';
 import { HybridBaseTheme } from './hybrid_base';
 import { NixieHybridTheme } from './nixie_hybrid';
 import { Tourbillon3DTheme } from './tourbillon_3d';
+import { Reactor3DTheme } from './reactor_3d';
+import { Orrery3DTheme } from './orrery_3d';
 import { ClockAudioEngine } from '../core/audioEngine';
 
 export type ThemeFactory = () => Theme;
@@ -55,6 +57,8 @@ export class ThemeManager {
     this.registerTheme(() => new HybridBaseTheme());
     this.registerTheme(() => new NixieHybridTheme());
     this.registerTheme(() => new Tourbillon3DTheme());
+    this.registerTheme(() => new Reactor3DTheme());
+    this.registerTheme(() => new Orrery3DTheme());
   }
 
 
@@ -173,6 +177,23 @@ export class ThemeManager {
       cleaned === 'horological_tourbillon_3d'
     ) {
       return 'tourbillon_3d';
+    }
+    if (
+      cleaned === 'reactor' ||
+      cleaned === 'reactor_3d' ||
+      cleaned === 'chrono_containment_reactor' ||
+      cleaned === 'chrono_reactor'
+    ) {
+      return 'reactor_3d';
+    }
+    if (
+      cleaned === 'orrery' ||
+      cleaned === 'orrery_3d' ||
+      cleaned === 'celestial_astrolabe' ||
+      cleaned === 'celestial_orrery' ||
+      cleaned === 'celestial_astrolabe_&_orrery'
+    ) {
+      return 'orrery_3d';
     }
 
     // Match by display name

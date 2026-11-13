@@ -146,6 +146,10 @@ async function bootstrap() {
       themePillLabel.textContent = '🔥 Nixie Chronograph (T)';
     } else if (themeId === 'tourbillon_3d') {
       themePillLabel.textContent = '⚙️ Horological Tourbillon 3D (T)';
+    } else if (themeId === 'reactor_3d') {
+      themePillLabel.textContent = '☢️ Chrono-Containment Reactor (T)';
+    } else if (themeId === 'orrery_3d') {
+      themePillLabel.textContent = '🪐 Celestial Astrolabe & Orrery (T)';
     } else {
       themePillLabel.textContent = '🕰️ Vienna Classic (T)';
     }

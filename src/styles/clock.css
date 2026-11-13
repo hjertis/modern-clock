@@ -38,6 +38,16 @@
   box-shadow: 0 20px 80px rgba(0, 0, 0, 0.98), 0 0 1px 1px rgba(217, 168, 78, 0.22);
 }
 
+#clock-stage[data-theme="reactor_3d"] {
+  background: #06080c;
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.98), 0 0 1px 1px rgba(0, 229, 255, 0.22);
+}
+
+#clock-stage[data-theme="orrery_3d"] {
+  background: #06080f;
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.98), 0 0 1px 1px rgba(198, 150, 72, 0.24);
+}
+
 
 /* Layered DOM Hierarchy */
 .clock-layer {

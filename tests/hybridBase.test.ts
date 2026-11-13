@@ -11,6 +11,8 @@ import { ThemeManager } from '../src/themes/themeManager';
 import { HybridBaseTheme, HYBRID_DIGITAL_CELL_SLOTS } from '../src/themes/hybrid_base';
 import { NixieHybridTheme } from '../src/themes/nixie_hybrid';
 import { Tourbillon3DTheme, computeCounterweightProgress } from '../src/themes/tourbillon_3d';
+import { Reactor3DTheme } from '../src/themes/reactor_3d';
+import { Orrery3DTheme, computeOrreryEphemeris } from '../src/themes/orrery_3d';
 import { ClockAudioEngine } from '../src/core/audioEngine';
 import { ClockEngine } from '../src/core/clockEngine';
 import { ClockWebSocketClient } from '../src/core/wsClient';
@@ -663,8 +665,390 @@ async function runHybridBaseTests() {
 
   console.log('✓ Test 6 Passed: Tourbillon 3D, ThreeStage disposal, multi-plane gears, counterweights & modes');
 
+  // 7. Chrono-Containment Reactor (`reactor_3d`), Three-Zone Architecture, BDC Arc Flash, Modes & Disposal
+  console.log('Test 7: Chrono-Containment Reactor (`reactor_3d`), ThreeStage, Modes & Magnetic Shutdown');
+  assert(availableIds.includes('reactor_3d'), 'reactor_3d must be registered in ThemeManager');
+  const reactorDescriptor = availableDescriptors.find((d) => d.id === 'reactor_3d');
+  assert(reactorDescriptor !== undefined);
+  assert.strictEqual(reactorDescriptor!.name, 'Chrono-Containment Reactor');
+
+  assert.strictEqual(themeManager.resolveThemeId('reactor_3d'), 'reactor_3d');
+  assert.strictEqual(themeManager.resolveThemeId('reactor'), 'reactor_3d');
+  assert.strictEqual(themeManager.resolveThemeId('Chrono-Containment Reactor'), 'reactor_3d');
+
+  const mountedReactor = (await themeManager.setTheme('reactor_3d', {
+    animateTransition: false
+  })) as Reactor3DTheme;
+  assert.strictEqual(mountedReactor.id, 'reactor_3d');
+  assert.strictEqual(mountedReactor.name, 'Chrono-Containment Reactor');
+  assert.strictEqual(audio.getSoundProfile(), 'reactor_3d');
+
+  const reactorStage = mountedReactor.getThreeStage();
+  assert(reactorStage !== null, 'ThreeStage must be initialized for reactor_3d');
+  assert.strictEqual(reactorStage!.width, 1080);
+  assert.strictEqual(reactorStage!.height, 1920);
+  assert.strictEqual(reactorStage!.fov, 30);
+
+  const reactorStats = reactorStage!.getResourceStats();
+  assert(reactorStats.geometries > 20, 'Reactor3D must track scene geometries');
+  assert(reactorStats.materials > 8, 'Reactor3D must track scene materials');
+  assert(reactorStats.textures >= 4, 'Reactor3D must track titanium bulkhead & PMREM textures');
+  assert.strictEqual(reactorStats.disposed, false);
+
+  const rTime1 = new Date(2026, 10, 13, 8, 15, 10, 100);
+  const rTick1 = formatSynchronizedTime(
+    rTime1,
+    { hourFormat: '24h', showSeconds: true, showDate: true },
+    'sweep'
+  );
+  // Pendulum swinging through negative -> zero crossing (bottom dead center) triggers cyan arc flash
+  mountedReactor.renderPendulum(mockCtx, {
+    angleDeg: -2.5,
+    angleRad: (-2.5 * Math.PI) / 180,
+    angularVelocityNorm: 0.7,
+    angularVelocityRad: 0.2,
+    phase: 0.2,
+    phaseRad: 1.25,
+    periodSeconds: 2.0,
+    maxAngleDeg: 6.0,
+    dampingFactor: 1.0,
+    dimmed: false,
+    pivot: { x: 540, y: 860 },
+    timeSec: 10.1
+  });
+  mountedReactor.renderDial(mockCtx, {
+    date: rTime1,
+    hours: 8,
+    minutes: 15,
+    seconds: 10,
+    milliseconds: 100,
+    angles: rTick1.angles,
+    secondMode: 'sweep',
+    timestampMs: rTime1.getTime(),
+    realTimeMs: 1000,
+    deltaTimeSec: 0.1,
+    displayOptions: rTick1.options,
+    digitalTick: rTick1
+  });
+
+  const rTime2 = new Date(2026, 10, 13, 8, 15, 11, 200);
+  const rTick2 = formatSynchronizedTime(
+    rTime2,
+    { hourFormat: '24h', showSeconds: true, showDate: true },
+    'sweep'
+  );
+  mountedReactor.renderPendulum(mockCtx, {
+    angleDeg: 0.2,
+    angleRad: (0.2 * Math.PI) / 180,
+    angularVelocityNorm: 0.98,
+    angularVelocityRad: 0.3,
+    phase: 0.25,
+    phaseRad: 1.57,
+    periodSeconds: 2.0,
+    maxAngleDeg: 6.0,
+    dampingFactor: 1.0,
+    dimmed: false,
+    pivot: { x: 540, y: 860 },
+    timeSec: 11.2
+  });
+  mountedReactor.renderDial(mockCtx, {
+    date: rTime2,
+    hours: 8,
+    minutes: 15,
+    seconds: 11,
+    milliseconds: 200,
+    angles: rTick2.angles,
+    secondMode: 'sweep',
+    timestampMs: rTime2.getTime(),
+    realTimeMs: 1100,
+    deltaTimeSec: 0.05,
+    displayOptions: rTick2.options,
+    digitalTick: rTick2
+  });
+
+  const reactorActive = mountedReactor.getDebugState();
+  assert.strictEqual(reactorActive.bloomThreshold, 1.45);
+  // Structural metals must remain non-emissive below bloom threshold while core/coolant/indices exceed 1.45
+  assert.strictEqual(reactorActive.titaniumEmissiveIntensity, 0);
+  assert.strictEqual(reactorActive.copperEmissiveIntensity, 0);
+  assert(
+    reactorActive.coreEmissiveIntensity >= 1.5 && reactorActive.coreEmissiveIntensity <= 2.2,
+    'Plasma core must stay above 1.45 bloom threshold without over-clipping (~2.0)'
+  );
+  assert(reactorActive.indexEmissiveIntensity > 1.45, 'Hour indices must exceed bloom threshold in active mode');
+  assert(reactorActive.coolantEmissiveIntensity > 1.45, 'Coolant core must exceed bloom threshold in active mode');
+  assert(reactorActive.secondHandEmissiveIntensity > 1.45, 'Second hand must exceed bloom threshold in active mode');
+  // Counter-rotating gimbal rings & tilted axes
+  assert(reactorActive.gimbalAnglesRad[0] < 0, 'Outer gimbal rotates negatively on Z');
+  assert(reactorActive.gimbalAnglesRad[1] > 0, 'Mid gimbal counter-rotates positively on X');
+  assert(reactorActive.gimbalAnglesRad[2] < 0, 'Inner gimbal counter-rotates negatively on Y');
+  assert(reactorActive.gimbalTiltDeg[0] >= 20 && reactorActive.gimbalTiltDeg[0] <= 35);
+  assert(Math.abs(reactorActive.gimbalTiltDeg[1]) >= 20 && Math.abs(reactorActive.gimbalTiltDeg[1]) <= 35);
+  // Servo escapement arm pulsed on second change (10 -> 11) + wrist status LED + grazing rim light
+  assert.strictEqual(reactorActive.servoLastSecond, 11);
+  assert(Math.abs(reactorActive.servoPulseAngleRad) > 0.01, 'Servo arm should pulse on 1s index');
+  assert(reactorActive.servoArmRimLightIntensity > 20, 'Bulkhead & 4 oclock servo rim light should be active');
+  assert(reactorActive.servoWristLedIntensity > 1.45, 'Servo wrist status LED should pulse above bloom threshold on 1 Hz tick');
+  // BDC cyan dynamic air-gap plasma arc triggered within +/-4 deg & under-bob point light pulse
+  assert(reactorActive.arcFlashIntensity > 0.7, 'BDC +/-4 deg window should trigger dynamic plasma arc');
+  assert(
+    reactorActive.arcLightPosition[1] < -6.5,
+    'Under-bob point light must be positioned at the central tungsten electrode tip'
+  );
+  assert(
+    reactorActive.arcLightIntensity > 20,
+    'Under-bob point light must pulse brightly in sync with plasma arc discharge'
+  );
+  assert(reactorActive.coreColorHex === '#00e5ff', `Active core should be Cherenkov cyan, got ${reactorActive.coreColorHex}`);
+
+  // Night mode: smooth transition to deep standby crimson (#ff1e38)
+  mountedReactor.onEvent({ type: 'mode_change', payload: { mode: 'night' } });
+  for (let step = 0; step < 30; step++) {
+    mountedReactor.renderDial(mockCtx, {
+      date: rTime2,
+      hours: 8,
+      minutes: 15,
+      seconds: 11,
+      milliseconds: 200 + step * 50,
+      angles: rTick2.angles,
+      secondMode: 'sweep',
+      timestampMs: rTime2.getTime() + step * 50,
+      realTimeMs: 1200 + step * 50,
+      deltaTimeSec: 0.1,
+      displayOptions: rTick2.options,
+      digitalTick: rTick2
+    });
+  }
+  const reactorNight = mountedReactor.getDebugState();
+  assert.strictEqual(reactorNight.mode, 'night');
+  assert(reactorNight.coreEmissiveIntensity < reactorActive.coreEmissiveIntensity);
+  assert(reactorNight.indexEmissiveIntensity < reactorActive.indexEmissiveIntensity);
+  assert(reactorNight.coreColorHex === '#ff1e38' || reactorNight.coreColorHex.startsWith('#ff'), `Night core should transition to standby crimson, got ${reactorNight.coreColorHex}`);
+
+  // Sleep mode: full magnetic shutdown -> gimbals lock to 0, pendulum damps to 0, core dims
+  mountedReactor.onEvent({ type: 'mode_change', payload: { mode: 'sleep' } });
+  for (let step = 0; step < 30; step++) {
+    mountedReactor.renderPendulum(mockCtx, {
+      angleDeg: 0,
+      angleRad: 0,
+      angularVelocityNorm: 0,
+      angularVelocityRad: 0,
+      phase: 0,
+      phaseRad: 0,
+      periodSeconds: 2.0,
+      maxAngleDeg: 6.0,
+      dampingFactor: 0.0,
+      dimmed: false,
+      pivot: { x: 540, y: 860 },
+      timeSec: 0
+    });
+    mountedReactor.renderDial(mockCtx, {
+      date: rTime2,
+      hours: 8,
+      minutes: 15,
+      seconds: 11,
+      milliseconds: 200,
+      angles: rTick2.angles,
+      secondMode: 'sweep',
+      timestampMs: rTime2.getTime(),
+      realTimeMs: 3000 + step * 1000,
+      deltaTimeSec: 0.15,
+      displayOptions: rTick2.options,
+      digitalTick: rTick2
+    });
+  }
+  const reactorSleep = mountedReactor.getDebugState();
+  assert.strictEqual(reactorSleep.brakeFactor, 0);
+  assert.strictEqual(reactorSleep.pendulumAngleRad, 0);
+  assert.strictEqual(reactorSleep.gimbalAnglesRad[0], 0);
+  assert.strictEqual(reactorSleep.gimbalAnglesRad[1], 0);
+  assert.strictEqual(reactorSleep.gimbalAnglesRad[2], 0);
+  assert(reactorSleep.coreEmissiveIntensity <= 0.08);
+  assert.strictEqual(reactorSleep.arcFlashIntensity, 0);
+
+  // Switching away from reactor_3d disposes all geometries, materials, textures, and render targets
+  await themeManager.setTheme('pcb_2049', { animateTransition: false });
+  const reactorDisposed = reactorStage!.getResourceStats();
+  assert.strictEqual(reactorDisposed.disposed, true);
+  assert.strictEqual(reactorDisposed.geometries, 0);
+  assert.strictEqual(reactorDisposed.materials, 0);
+  assert.strictEqual(reactorDisposed.textures, 0);
+  assert.strictEqual(reactorDisposed.renderTargets, 0);
+
+  console.log('✓ Test 7 Passed: Chrono-Containment Reactor 3D, ThreeStage disposal, BDC arc flash & modes');
+
+  // 8. Celestial Astrolabe & Orrery (`orrery_3d`), Offline Ephemeris, Solar Terminator, Eclipse Sleep & Disposal
+  console.log('Test 8: Celestial Astrolabe & Orrery (`orrery_3d`), Ephemeris, Modes & Disposal');
+  assert(availableIds.includes('orrery_3d'), 'orrery_3d must be registered in ThemeManager');
+  const orreryDescriptor = availableDescriptors.find((d) => d.id === 'orrery_3d');
+  assert(orreryDescriptor !== undefined);
+  assert.strictEqual(orreryDescriptor!.name, 'Celestial Astrolabe & Orrery');
+
+  assert.strictEqual(themeManager.resolveThemeId('orrery_3d'), 'orrery_3d');
+  assert.strictEqual(themeManager.resolveThemeId('orrery'), 'orrery_3d');
+  assert.strictEqual(themeManager.resolveThemeId('Celestial Astrolabe & Orrery'), 'orrery_3d');
+
+  // Verify offline ephemeris calculation via astronomy-engine across distinct dates
+  const ephemA = computeOrreryEphemeris(new Date('2026-11-13T10:15:00Z'));
+  const ephemB = computeOrreryEphemeris(new Date('2026-12-13T10:15:00Z'));
+  assert(ephemA.mercuryLonDeg >= 0 && ephemA.mercuryLonDeg < 360);
+  assert(ephemA.venusLonDeg >= 0 && ephemA.venusLonDeg < 360);
+  assert(ephemA.earthLonDeg >= 0 && ephemA.earthLonDeg < 360);
+  assert(ephemA.marsLonDeg >= 0 && ephemA.marsLonDeg < 360);
+  assert(ephemA.jupiterLonDeg >= 0 && ephemA.jupiterLonDeg < 360);
+  assert(ephemA.lunarPhaseDeg >= 0 && ephemA.lunarPhaseDeg < 360);
+  assert(ephemA.siderealHours >= 0 && ephemA.siderealHours < 24);
+  assert(
+    Math.abs(ephemB.mercuryLonDeg - ephemA.mercuryLonDeg) > 1.0,
+    'Planetary ephemeris longitudes must advance offline across dates'
+  );
+  assert(
+    Math.abs(ephemB.earthLonDeg - ephemA.earthLonDeg) > 20.0,
+    'Earth heliocentric longitude must advance ~30 deg across 1 month'
+  );
+
+  const mountedOrrery = (await themeManager.setTheme('orrery_3d', {
+    animateTransition: false
+  })) as Orrery3DTheme;
+  assert.strictEqual(mountedOrrery.id, 'orrery_3d');
+  assert.strictEqual(mountedOrrery.name, 'Celestial Astrolabe & Orrery');
+  assert.strictEqual(audio.getSoundProfile(), 'orrery_3d');
+
+  const orreryStage = mountedOrrery.getThreeStage();
+  assert(orreryStage !== null, 'ThreeStage must be initialized for orrery_3d');
+  assert.strictEqual(orreryStage!.width, 1080);
+  assert.strictEqual(orreryStage!.height, 1920);
+  assert.strictEqual(orreryStage!.fov, 30);
+
+  const orreryStats = orreryStage!.getResourceStats();
+  assert(orreryStats.geometries > 20, 'Orrery3D must track scene geometries');
+  assert(orreryStats.materials > 10, 'Orrery3D must track scene materials');
+  assert(orreryStats.textures >= 7, 'Orrery3D must track walnut, Earth, Moon, Jupiter & PMREM textures');
+  assert.strictEqual(orreryStats.disposed, false);
+
+  const oTime = new Date('2026-11-13T10:15:30.250Z');
+  const oTick = formatSynchronizedTime(
+    oTime,
+    { hourFormat: '24h', showSeconds: true, showDate: true },
+    'sweep'
+  );
+  mountedOrrery.renderPendulum(mockCtx, {
+    angleDeg: 4.5,
+    angleRad: (4.5 * Math.PI) / 180,
+    angularVelocityNorm: 0.6,
+    angularVelocityRad: 0.15,
+    phase: 0.15,
+    phaseRad: 0.94,
+    periodSeconds: 2.0,
+    maxAngleDeg: 6.0,
+    dampingFactor: 1.0,
+    dimmed: false,
+    pivot: { x: 540, y: 860 },
+    timeSec: 30.25
+  });
+  mountedOrrery.renderDial(mockCtx, {
+    date: oTime,
+    hours: oTick.hours24,
+    minutes: oTick.minutes,
+    seconds: oTick.seconds,
+    milliseconds: oTick.milliseconds,
+    angles: oTick.angles,
+    secondMode: 'sweep',
+    timestampMs: oTime.getTime(),
+    realTimeMs: 2000,
+    deltaTimeSec: 0.1,
+    displayOptions: oTick.options,
+    digitalTick: oTick
+  });
+
+  const orreryActive = mountedOrrery.getDebugState();
+  assert.strictEqual(orreryActive.bloomThreshold, 1.45);
+  assert.strictEqual(orreryActive.brassEmissiveIntensity, 0);
+  assert.strictEqual(orreryActive.obsidianEmissiveIntensity, 0);
+  assert(orreryActive.solarEmissiveIntensity > 1.45, 'Solar corona must exceed bloom threshold in active mode');
+  assert(orreryActive.indexEmissiveIntensity > 1.45, 'Backlit zodiac indices must exceed bloom threshold');
+  assert(orreryActive.lunarEmissiveIntensity > 1.45, 'Sunlit lunar hemisphere must exceed bloom threshold');
+  assert(orreryActive.solarLightIntensity > 20, 'Central solar PointLight must illuminate planetary terminators');
+  assert(Math.abs(orreryActive.pendulumAngleRad) > 0.04, 'Armillary pendulum should swing in active mode');
+
+  // Night mode: smooth red-shift transition
+  mountedOrrery.onEvent({ type: 'mode_change', payload: { mode: 'night' } });
+  for (let step = 0; step < 25; step++) {
+    mountedOrrery.renderDial(mockCtx, {
+      date: oTime,
+      hours: oTick.hours24,
+      minutes: oTick.minutes,
+      seconds: oTick.seconds,
+      milliseconds: oTick.milliseconds,
+      angles: oTick.angles,
+      secondMode: 'sweep',
+      timestampMs: oTime.getTime() + step * 50,
+      realTimeMs: 2200 + step * 50,
+      deltaTimeSec: 0.1,
+      displayOptions: oTick.options,
+      digitalTick: oTick
+    });
+  }
+  const orreryNight = mountedOrrery.getDebugState();
+  assert.strictEqual(orreryNight.mode, 'night');
+  assert(orreryNight.solarEmissiveIntensity < orreryActive.solarEmissiveIntensity);
+  assert(orreryNight.indexEmissiveIntensity < orreryActive.indexEmissiveIntensity);
+  assert(
+    orreryNight.solarColorHex.startsWith('#ff'),
+    `Night solar glow should red-shift, got ${orreryNight.solarColorHex}`
+  );
+
+  // Sleep mode: eclipse corona ring + pendulum smoothly damps to 0
+  mountedOrrery.onEvent({ type: 'mode_change', payload: { mode: 'sleep' } });
+  for (let step = 0; step < 30; step++) {
+    mountedOrrery.renderPendulum(mockCtx, {
+      angleDeg: 0,
+      angleRad: 0,
+      angularVelocityNorm: 0,
+      angularVelocityRad: 0,
+      phase: 0,
+      phaseRad: 0,
+      periodSeconds: 2.0,
+      maxAngleDeg: 6.0,
+      dampingFactor: 0.0,
+      dimmed: false,
+      pivot: { x: 540, y: 860 },
+      timeSec: 0
+    });
+    mountedOrrery.renderDial(mockCtx, {
+      date: oTime,
+      hours: oTick.hours24,
+      minutes: oTick.minutes,
+      seconds: oTick.seconds,
+      milliseconds: oTick.milliseconds,
+      angles: oTick.angles,
+      secondMode: 'sweep',
+      timestampMs: oTime.getTime(),
+      realTimeMs: 4000 + step * 1000,
+      deltaTimeSec: 0.15,
+      displayOptions: oTick.options,
+      digitalTick: oTick
+    });
+  }
+  const orrerySleep = mountedOrrery.getDebugState();
+  assert.strictEqual(orrerySleep.brakeFactor, 0);
+  assert.strictEqual(orrerySleep.pendulumAngleRad, 0);
+  assert(orrerySleep.eclipseFactor > 0.9, 'Sleep mode must activate solar eclipse factor (~1.0)');
+  assert(orrerySleep.solarEmissiveIntensity <= 0.2);
+
+  // Switching away from orrery_3d cleanly disposes all GPU resources
+  await themeManager.setTheme('pcb_2049', { animateTransition: false });
+  const orreryDisposed = orreryStage!.getResourceStats();
+  assert.strictEqual(orreryDisposed.disposed, true);
+  assert.strictEqual(orreryDisposed.geometries, 0);
+  assert.strictEqual(orreryDisposed.materials, 0);
+  assert.strictEqual(orreryDisposed.textures, 0);
+  assert.strictEqual(orreryDisposed.renderTargets, 0);
+
+  console.log('✓ Test 8 Passed: Celestial Astrolabe & Orrery 3D, Ephemeris, Eclipse Sleep & Disposal');
+
   console.log('==================================================');
-  console.log('🎉 ALL HYBRID, NIXIE & TOURBILLON 3D TESTS PASSED! (6/6 Test Suites)');
+  console.log('🎉 ALL HYBRID, NIXIE, TOURBILLON, REACTOR & ORRERY 3D TESTS PASSED! (8/8 Test Suites)');
   console.log('==================================================');
 }
 
