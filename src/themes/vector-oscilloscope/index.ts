@@ -1041,6 +1041,10 @@ export class VectorOscilloscopeTheme implements ClockTheme {
   }
 
   public dispose(): void {
+    if (this.staticLayer) {
+      this.staticLayer.width = 0;
+      this.staticLayer.height = 0;
+    }
     this.ctx = null;
     this.staticLayer = null;
     this.staticCtx = null;

@@ -19,6 +19,11 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+body.kiosk-cursor-hidden,
+body.kiosk-cursor-hidden * {
+  cursor: none !important;
+}
+
 /* Floating discreet HUD & Theme toggle buttons on top-left */
 #top-control-pills {
   position: fixed;

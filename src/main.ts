@@ -60,6 +60,65 @@ function initViewportScaling(stage: HTMLElement): void {
   updateScale();
 }
 
+function initKioskWakeLock(): void {
+  if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
+
+  let wakeLockSentinel: WakeLockSentinel | null = null;
+
+  const acquireWakeLock = async () => {
+    try {
+      if (document.visibilityState === 'visible') {
+        wakeLockSentinel = await navigator.wakeLock.request('screen');
+        wakeLockSentinel.addEventListener('release', () => {
+          wakeLockSentinel = null;
+        });
+      }
+    } catch {
+      // Browser may require a user gesture or deny Wake Lock in headless environments
+    }
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !wakeLockSentinel) {
+      void acquireWakeLock();
+    }
+  });
+
+  window.addEventListener(
+    'pointerdown',
+    () => {
+      if (!wakeLockSentinel) {
+        void acquireWakeLock();
+      }
+    },
+    { once: true, passive: true }
+  );
+
+  void acquireWakeLock();
+}
+
+function initIdleCursorHiding(idleTimeoutMs = 5000): void {
+  if (typeof document === 'undefined' || !document.body) return;
+
+  let idleTimer: number | null = null;
+
+  const resetIdleTimer = () => {
+    document.body.classList.remove('kiosk-cursor-hidden');
+    if (idleTimer !== null) {
+      window.clearTimeout(idleTimer);
+    }
+    idleTimer = window.setTimeout(() => {
+      document.body.classList.add('kiosk-cursor-hidden');
+    }, idleTimeoutMs);
+  };
+
+  for (const evt of ['pointermove', 'pointerdown', 'keydown', 'touchstart']) {
+    window.addEventListener(evt, resetIdleTimer, { passive: true });
+  }
+
+  resetIdleTimer();
+}
+
 async function bootstrap() {
   const stage = document.getElementById('clock-stage') as HTMLElement;
   const canvas = document.getElementById('clock-canvas') as HTMLCanvasElement;
@@ -80,8 +139,10 @@ async function bootstrap() {
     throw new Error('Missing required clock DOM elements');
   }
 
-  // 1. Fixed Canvas Containment Scaling
+  // 1. Fixed Canvas Containment Scaling & 24/7 Kiosk Safeguards
   initViewportScaling(stage);
+  initKioskWakeLock();
+  initIdleCursorHiding(5000);
 
   // 2. DOM Elements Bundle
   const elements: ClockDomElements = {
@@ -111,7 +172,12 @@ async function bootstrap() {
   });
   const themeManager = new ThemeManager(canvas, stage, notificationZone, audioEngine);
   const clockEngine = new ClockEngine(elements, { themeManager, audioEngine, sleepManager });
-  const notificationManager = new NotificationManager(notificationZone, pendulum, audioEngine);
+  const notificationManager = new NotificationManager(
+    notificationZone,
+    pendulum,
+    audioEngine,
+    sleepManager
+  );
 
   // Sync mode changes across all subsystems
   sleepManager.onModeChange((mode, prevMode) => {

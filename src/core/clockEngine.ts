@@ -208,7 +208,9 @@ export class ClockEngine {
 
     // 0. FPS Throttling for Power & Presence States
     // 'night': capped to 30 FPS. 'sleep': throttled to 1 FPS. 'active' / 'silent': uncapped.
-    if (this.targetMaxFps !== null && this.targetMaxFps > 0) {
+    // Bypass throttling during urgentOverride (e.g. doorbell / securityAlert in sleep mode).
+    const isUrgentOverride = this.sleepManager?.getIsUrgentOverride() ?? false;
+    if (!isUrgentOverride && this.targetMaxFps !== null && this.targetMaxFps > 0) {
       const minIntervalMs = 1000 / this.targetMaxFps;
       if (nowPerf - this.lastRenderPerfTimeMs < minIntervalMs - 1.5) {
         return; // Throttled
@@ -223,8 +225,10 @@ export class ClockEngine {
     this.smoothedFps = this.smoothedFps * 0.92 + instantFps * 0.08;
     this.smoothedFrameTimeMs = this.smoothedFrameTimeMs * 0.92 + rawDeltaMs * 0.08;
 
-    const elapsedRealMs = nowPerf - this.baseRealTime;
-    const currentSimulatedMs = this.baseSimulatedTime + elapsedRealMs * this.timeMultiplier;
+    const currentSimulatedMs =
+      this.timeMultiplier === 1.0
+        ? Date.now()
+        : this.baseSimulatedTime + (nowPerf - this.baseRealTime) * this.timeMultiplier;
     const currentDate = new Date(currentSimulatedMs);
 
     // Dynamic sleep evaluation & damping factor
@@ -426,6 +430,9 @@ export class ClockEngine {
   }
 
   public getCurrentSimulatedTime(): Date {
+    if (this.timeMultiplier === 1.0) {
+      return new Date();
+    }
     const nowPerf = performance.now();
     const elapsedRealMs = nowPerf - this.baseRealTime;
     return new Date(this.baseSimulatedTime + elapsedRealMs * this.timeMultiplier);

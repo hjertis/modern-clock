@@ -62,7 +62,7 @@ export interface BackendNotifyMessage {
   priority?: 'normal' | 'urgent';
   durationMs?: number;
   timeoutMs?: number;
-  category?: 'alert' | 'info' | 'doorbell' | 'calendar' | 'weather';
+  category?: 'alert' | 'info' | 'doorbell' | 'securityAlert' | 'calendar' | 'weather';
   timestamp?: string;
 }
 
@@ -506,11 +506,17 @@ export class ClockWebSocketClient {
           category = priority === 'urgent' ? 'alert' : 'info';
         }
 
-        const duration = typedMsg.durationMs || typedMsg.timeoutMs || 8000;
+        const rawDuration =
+          typeof typedMsg.durationMs === 'number' && Number.isFinite(typedMsg.durationMs)
+            ? typedMsg.durationMs
+            : typeof typedMsg.timeoutMs === 'number' && Number.isFinite(typedMsg.timeoutMs)
+              ? typedMsg.timeoutMs
+              : 8000;
+        const duration = Math.max(1000, Math.min(60000, Math.round(rawDuration)));
         const payload: NotificationPayload = {
           id: typedMsg.id,
-          title: typedMsg.title || (priority === 'urgent' ? 'Security Alert' : 'Notification'),
-          message: typedMsg.message || '',
+          title: (typedMsg.title || (priority === 'urgent' ? 'Security Alert' : 'Notification')).slice(0, 120),
+          message: (typedMsg.message || '').slice(0, 500),
           priority,
           category,
           timeoutMs: duration,

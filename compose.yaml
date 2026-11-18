@@ -4,13 +4,33 @@ services:
     image: cirqit-labs/grandfather-clock:1.0.0
     container_name: grandfather-clock
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "8088:8088"
     environment:
       - TZ=Europe/Copenhagen
       - PORT=8088
-      - MQTT_HOST=192.168.0.69
-      - MQTT_PORT=1883
+      - MQTT_HOST=${MQTT_HOST:-mosquitto}
+      - MQTT_PORT=${MQTT_PORT:-1883}
       - MQTT_USER=${MQTT_USER:-}
       - MQTT_PASS=${MQTT_PASS:-}
+      - API_TOKEN=${API_TOKEN:-}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+    healthcheck:
+      test: ["CMD", "/app/grandfather-clock", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 

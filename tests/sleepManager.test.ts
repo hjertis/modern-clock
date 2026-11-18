@@ -57,10 +57,13 @@ class MockElement {
   }
 
   public innerHTML = '';
+  public textContent = '';
   public className = '';
+  public children: any[] = [];
   public setAttribute(_name: string, _value: string) {}
   public getAttribute(_name: string) { return null; }
-  public prepend(_child: any) {}
+  public appendChild(child: any) { this.children.push(child); return child; }
+  public prepend(child: any) { this.children.unshift(child); }
   public removeChild(_child: any) {}
   public querySelector(_sel: string) { return null; }
   public querySelectorAll(_sel: string) { return []; }
@@ -446,8 +449,53 @@ async function runTests() {
   ]);
   console.log('✓ Test 9 Passed: Frontend Theme Registry handshake & dynamic runtime registration');
 
+  // 10. Safe DOM Toast Rendering, Sanitization & Urgent Override Wake
+  console.log('Test 10: Notification Sanitization & Sleep Urgent Override');
+  const wakeStage = new MockElement() as any;
+  const wakeSleepMgr = new SleepManager(wakeStage);
+  wakeSleepMgr.setMode('sleep', true);
+  assert.strictEqual(wakeSleepMgr.getIsSleeping(), true);
+  assert.strictEqual(wakeSleepMgr.getIsUrgentOverride(), false);
+
+  const wakeZone = new MockElement() as any;
+  const wakeNotifMgr = new NotificationManager(wakeZone, null, null, wakeSleepMgr);
+  wakeNotifMgr.setMode('sleep');
+
+  const alertId = wakeNotifMgr.notify({
+    title: '<img src=x onerror=alert(1)>' + 'A'.repeat(200),
+    message: 'B'.repeat(700),
+    category: 'doorbell',
+    timeoutMs: 999999
+  });
+
+  // Should wake sleep mode via urgentOverride
+  assert.strictEqual(wakeSleepMgr.getIsUrgentOverride(), true);
+  assert.strictEqual(wakeSleepMgr.getIsSleeping(), false);
+  assert.strictEqual(wakeStage.classList.contains('mode-sleep'), false);
+
+  // Card should have zero innerHTML and truncated textContent
+  const renderedCard = wakeZone.children[0] as MockElement;
+  assert.strictEqual(renderedCard.innerHTML, '');
+  const headerEl = renderedCard.children[1] as MockElement;
+  const titleWrapEl = headerEl.children[0] as MockElement;
+  const titleSpan = titleWrapEl.children[1] as MockElement;
+  const bodyEl = renderedCard.children[2] as MockElement;
+  const msgP = bodyEl.children[0] as MockElement;
+  const progressEl = renderedCard.children[4] as MockElement & { style: { animationDuration?: string } };
+  assert.strictEqual(titleSpan.textContent.length, 120);
+  assert.strictEqual(msgP.textContent.length, 500);
+  assert.strictEqual(progressEl.style.animationDuration, '60000ms');
+
+  // Dismissing the doorbell alert should restore sleep mode after exit transition
+  wakeNotifMgr.dismiss(alertId);
+  await new Promise((r) => setTimeout(r, 500));
+  assert.strictEqual(wakeSleepMgr.getIsUrgentOverride(), false);
+  assert.strictEqual(wakeSleepMgr.getIsSleeping(), true);
+  assert.strictEqual(wakeStage.classList.contains('mode-sleep'), true);
+  console.log('✓ Test 10 Passed: Zero innerHTML, input bounds, and sleep urgentOverride wake/restore');
+
   console.log('==================================================');
-  console.log('🎉 ALL TESTS PASSED SUCCESSFULLY! (9/9 Test Suites)');
+  console.log('🎉 ALL TESTS PASSED SUCCESSFULLY! (10/10 Test Suites)');
   console.log('==================================================');
 }
 

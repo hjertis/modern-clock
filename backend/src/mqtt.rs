@@ -3,14 +3,17 @@ use serde_json::json;
 use std::{
     env,
     sync::atomic::Ordering,
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use tokio::time::sleep;
+use tokio::{sync::watch, time::sleep};
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    models::{BroadcastEvent, ConfigRequest, NotificationPriority, NotificationRequest},
-    state::AppState,
+    models::{
+        normalize_category, truncate_chars, BroadcastEvent, ConfigRequest, NotificationPriority,
+        NotificationRequest, MAX_MESSAGE_CHARS, MAX_THEME_CHARS, MAX_TITLE_CHARS,
+    },
+    state::{is_valid_theme_id, AppState},
 };
 
 #[derive(Clone, Debug)]
@@ -75,7 +78,16 @@ impl MqttConfig {
     }
 }
 
-pub async fn run_mqtt_bridge(state: AppState) {
+pub fn compute_reconnect_backoff(attempt: u32) -> Duration {
+    let exp_secs = (1u64 << attempt.min(6)).min(60);
+    let jitter_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| (d.subsec_nanos() % 1000) as u64)
+        .unwrap_or(0);
+    Duration::from_secs(exp_secs) + Duration::from_millis(jitter_ms)
+}
+
+pub async fn run_mqtt_bridge(state: AppState, mut shutdown_rx: watch::Receiver<bool>) {
     let cfg = MqttConfig::from_env();
     info!(
         broker = %format!("{}:{}", cfg.host, cfg.port),
@@ -84,7 +96,13 @@ pub async fn run_mqtt_bridge(state: AppState) {
         "Starting MQTT bridge background task"
     );
 
+    let mut reconnect_attempt: u32 = 0;
+
     loop {
+        if *shutdown_rx.borrow() {
+            break;
+        }
+
         let mut mqttoptions = MqttOptions::new(&cfg.client_id, &cfg.host, cfg.port);
         mqttoptions.set_keep_alive(Duration::from_secs(15));
         mqttoptions.set_clean_session(true);
@@ -106,67 +124,100 @@ pub async fn run_mqtt_bridge(state: AppState) {
 
         info!(host = %cfg.host, port = cfg.port, "Connecting to MQTT broker...");
 
-        // Continually poll eventloop
+        // Continually poll eventloop until disconnect or shutdown
         loop {
-            match eventloop.poll().await {
-                Ok(notification) => {
-                    match notification {
-                        Event::Incoming(Incoming::ConnAck(_)) => {
-                            info!("Successfully connected to MQTT broker");
-                            state.mqtt_connected.store(true, Ordering::Relaxed);
-                            *state.mqtt_prefix.write().await = cfg.prefix.clone();
-                            *state.mqtt_client.write().await = Some(client.clone());
+            tokio::select! {
+                _ = shutdown_rx.changed() => {
+                    if *shutdown_rx.borrow() {
+                        info!("Shutdown signal received; publishing MQTT offline status...");
+                        if state.is_mqtt_connected() {
+                            let _ = client
+                                .publish(&status_topic, QoS::AtLeastOnce, true, "offline")
+                                .await;
+                            let _ = client.disconnect().await;
+                        }
+                        state.mqtt_connected.store(false, Ordering::Relaxed);
+                        *state.mqtt_client.write().await = None;
+                        return;
+                    }
+                }
+                poll_res = eventloop.poll() => {
+                    match poll_res {
+                        Ok(notification) => {
+                            match notification {
+                                Event::Incoming(Incoming::ConnAck(_)) => {
+                                    info!("Successfully connected to MQTT broker");
+                                    reconnect_attempt = 0;
+                                    state.mqtt_connected.store(true, Ordering::Relaxed);
+                                    *state.mqtt_prefix.write().await = cfg.prefix.clone();
+                                    *state.mqtt_client.write().await = Some(client.clone());
 
-                            // Publish device status as online (retained)
-                            if let Err(e) = client.publish(&status_topic, QoS::AtLeastOnce, true, "online").await {
-                                warn!("Failed to publish online status: {}", e);
-                            }
+                                    // Publish device status as online (retained)
+                                    if let Err(e) = client.publish(&status_topic, QoS::AtLeastOnce, true, "online").await {
+                                        warn!("Failed to publish online status: {}", e);
+                                    }
 
-                            // Publish Home Assistant auto-discovery payloads using current available_themes
-                            publish_ha_discovery(&client, &cfg, &state).await;
+                                    // Publish Home Assistant auto-discovery payloads using current available_themes
+                                    publish_ha_discovery(&client, &cfg, &state).await;
 
-                            // Subscribe to wildcards under prefix
-                            let sub_topic = format!("{}/#", cfg.prefix);
-                            if let Err(e) = client.subscribe(&sub_topic, QoS::AtLeastOnce).await {
-                                error!(topic = %sub_topic, "Failed to subscribe to MQTT prefix topic: {}", e);
-                            } else {
-                                info!(topic = %sub_topic, "Subscribed to MQTT topics");
-                            }
+                                    // Subscribe to wildcards under prefix
+                                    let sub_topic = format!("{}/#", cfg.prefix);
+                                    if let Err(e) = client.subscribe(&sub_topic, QoS::AtLeastOnce).await {
+                                        error!(topic = %sub_topic, "Failed to subscribe to MQTT prefix topic: {}", e);
+                                    } else {
+                                        info!(topic = %sub_topic, "Subscribed to MQTT topics");
+                                    }
 
-                            // Subscribe to Home Assistant status to handle HA reboots
-                            if let Err(e) = client.subscribe("homeassistant/status", QoS::AtLeastOnce).await {
-                                error!("Failed to subscribe to homeassistant/status: {}", e);
-                            } else {
-                                info!("Subscribed to homeassistant/status");
+                                    // Subscribe to Home Assistant status to handle HA reboots
+                                    if let Err(e) = client.subscribe("homeassistant/status", QoS::AtLeastOnce).await {
+                                        error!("Failed to subscribe to homeassistant/status: {}", e);
+                                    } else {
+                                        info!("Subscribed to homeassistant/status");
+                                    }
+                                }
+                                Event::Incoming(Incoming::Publish(publish)) => {
+                                    handle_incoming_publish(&client, &state, &cfg, &publish.topic, &publish.payload).await;
+                                }
+                                Event::Incoming(Incoming::Disconnect) => {
+                                    warn!("Received disconnect from MQTT broker");
+                                    state.mqtt_connected.store(false, Ordering::Relaxed);
+                                    *state.mqtt_client.write().await = None;
+                                    break;
+                                }
+                                _ => {}
                             }
                         }
-                        Event::Incoming(Incoming::Publish(publish)) => {
-                            handle_incoming_publish(&client, &state, &cfg, &publish.topic, &publish.payload).await;
-                        }
-                        Event::Incoming(Incoming::Disconnect) => {
-                            warn!("Received disconnect from MQTT broker");
+                        Err(err) => {
+                            warn!(error = %err, "MQTT event loop error/disconnection");
                             state.mqtt_connected.store(false, Ordering::Relaxed);
                             *state.mqtt_client.write().await = None;
                             break;
                         }
-                        _ => {}
                     }
-                }
-                Err(err) => {
-                    warn!(error = %err, "MQTT event loop error/disconnection");
-                    state.mqtt_connected.store(false, Ordering::Relaxed);
-                    *state.mqtt_client.write().await = None;
-                    break;
                 }
             }
         }
 
-        // Backoff delay before reconnecting
+        // Exponential backoff with jitter before reconnecting
         state.mqtt_connected.store(false, Ordering::Relaxed);
         *state.mqtt_client.write().await = None;
-        let backoff = Duration::from_secs(5);
-        warn!("MQTT connection lost. Retrying in {} seconds...", backoff.as_secs());
-        sleep(backoff).await;
+        let backoff = compute_reconnect_backoff(reconnect_attempt);
+        reconnect_attempt = reconnect_attempt.saturating_add(1);
+        warn!(
+            attempt = reconnect_attempt,
+            delay_ms = backoff.as_millis(),
+            "MQTT connection lost. Retrying..."
+        );
+
+        tokio::select! {
+            _ = sleep(backoff) => {}
+            _ = shutdown_rx.changed() => {
+                if *shutdown_rx.borrow() {
+                    info!("Shutdown signal received during MQTT reconnect backoff");
+                    return;
+                }
+            }
+        }
     }
 }
 
@@ -358,10 +409,16 @@ async fn handle_incoming_publish(
                 .or_else(|| val.get("theme_id"))
                 .and_then(|t| t.as_str())
                 .unwrap_or(payload_str)
+                .trim()
                 .to_string()
         } else {
-            payload_str.trim_matches('"').to_string()
+            payload_str.trim_matches('"').trim().to_string()
         };
+
+        if !is_valid_theme_id(&theme_str) {
+            warn!(theme = %theme_str, "Ignored invalid/oversized theme over MQTT");
+            return;
+        }
 
         info!(theme = %theme_str, "Switching theme via MQTT");
         {
@@ -413,57 +470,89 @@ async fn handle_incoming_publish(
 
     if topic == notify_topic {
         // First attempt: typed NotificationRequest JSON
-        if let Ok(req) = serde_json::from_str::<NotificationRequest>(payload_str) {
-            let event = BroadcastEvent::new_notify(req);
-            let _ = state.broadcast_event(&event);
+        if let Ok(mut req) = serde_json::from_str::<NotificationRequest>(payload_str) {
+            req.title = truncate_chars(req.title.trim(), MAX_TITLE_CHARS);
+            req.message = truncate_chars(req.message.trim(), MAX_MESSAGE_CHARS);
+            req.category = normalize_category(req.category.as_deref(), req.priority);
+            if !req.title.is_empty() && !req.message.is_empty() {
+                let event = BroadcastEvent::new_notify(req);
+                let _ = state.broadcast_event(&event);
+            }
         } else if let Ok(val) = serde_json::from_str::<serde_json::Value>(payload_str) {
             // Second attempt: flexible JSON with message / text
-            let title = val.get("title")
-                .and_then(|t| t.as_str())
-                .unwrap_or("MQTT Notification")
-                .to_string();
+            let title = truncate_chars(
+                val.get("title")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("MQTT Notification")
+                    .trim(),
+                MAX_TITLE_CHARS,
+            );
 
-            let message = val.get("message")
-                .or_else(|| val.get("text"))
-                .or_else(|| val.get("body"))
-                .and_then(|m| m.as_str())
-                .unwrap_or(payload_str)
-                .to_string();
+            let message = truncate_chars(
+                val.get("message")
+                    .or_else(|| val.get("text"))
+                    .or_else(|| val.get("body"))
+                    .and_then(|m| m.as_str())
+                    .unwrap_or(payload_str)
+                    .trim(),
+                MAX_MESSAGE_CHARS,
+            );
 
             let priority = match val.get("priority").and_then(|p| p.as_str()) {
                 Some("urgent") | Some("alert") | Some("high") => NotificationPriority::Urgent,
                 _ => NotificationPriority::Normal,
             };
 
+            let category = normalize_category(
+                val.get("category").and_then(|c| c.as_str()),
+                priority,
+            );
+
             let duration_ms = val.get("durationMs")
                 .or_else(|| val.get("timeoutMs"))
                 .and_then(|d| d.as_u64())
+                .filter(|&d| d > 0)
                 .unwrap_or(8000);
 
-            let req = NotificationRequest {
-                title,
-                message,
-                priority,
-                duration_ms,
-            };
-            let event = BroadcastEvent::new_notify(req);
-            let _ = state.broadcast_event(&event);
+            if !title.is_empty() && !message.is_empty() {
+                let req = NotificationRequest {
+                    title,
+                    message,
+                    priority,
+                    category,
+                    duration_ms,
+                };
+                let event = BroadcastEvent::new_notify(req);
+                let _ = state.broadcast_event(&event);
+            }
         } else {
             // Third attempt: Plain text payload
-            let req = NotificationRequest {
-                title: "MQTT Alert".to_string(),
-                message: payload_str.to_string(),
-                priority: NotificationPriority::Normal,
-                duration_ms: 8000,
-            };
-            let event = BroadcastEvent::new_notify(req);
-            let _ = state.broadcast_event(&event);
+            let message = truncate_chars(payload_str.trim(), MAX_MESSAGE_CHARS);
+            if !message.is_empty() {
+                let req = NotificationRequest {
+                    title: "MQTT Alert".to_string(),
+                    message,
+                    priority: NotificationPriority::Normal,
+                    category: Some("info".to_string()),
+                    duration_ms: 8000,
+                };
+                let event = BroadcastEvent::new_notify(req);
+                let _ = state.broadcast_event(&event);
+            }
         }
         return;
     }
 
     if topic == config_topic {
-        if let Ok(req) = serde_json::from_str::<ConfigRequest>(payload_str) {
+        if let Ok(mut req) = serde_json::from_str::<ConfigRequest>(payload_str) {
+            if let Some(ref theme) = req.theme {
+                let trimmed = truncate_chars(theme.trim(), MAX_THEME_CHARS);
+                if is_valid_theme_id(&trimmed) {
+                    req.theme = Some(trimmed);
+                } else {
+                    req.theme = None;
+                }
+            }
             {
                 let mut cfg_lock = state.config.write().await;
                 if let Some(ref theme) = req.theme {

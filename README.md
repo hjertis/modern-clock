@@ -173,22 +173,41 @@ Output is bundled cleanly into `dist/`.
 
 The backend ingestion daemon connects local MQTT sensors/Home Assistant and external HTTP webhooks directly to the portrait frontend over WebSockets.
 
-### Start with Hot-Reload Docker Setup
+### Start with Docker Compose
 ```bash
-docker compose -f docker-compose.dev.yml up
+MQTT_HOST=192.168.1.50 docker compose -f compose.yaml up -d --build
 ```
 
 ### Test Alert Delivery via cURL
 ```bash
-curl -X POST http://localhost:8080/api/notify \
+curl -X POST http://localhost:8088/api/notify \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Front Door",
     "message": "Package delivered",
+    "category": "doorbell",
     "priority": "normal",
     "durationMs": 8000
   }'
 ```
+*(If `API_TOKEN` is configured, include `-H "Authorization: Bearer <API_TOKEN>"`.)*
+
+### Environment Variables
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `PORT` | `8088` | HTTP & WebSocket listen port |
+| `STATIC_DIR` | `./static` | Directory serving the built frontend bundle |
+| `RUST_LOG` | `grandfather_clock_backend=info,tower_http=info` | Structured log filter |
+| `API_TOKEN` | *(unset)* | Optional Bearer token for `POST /api/notify`, `POST /api/config`, and authenticated `/ws` `register_themes` |
+| `ALLOWED_ORIGINS` | *(unset / same-origin)* | Comma-separated CORS & WebSocket `Origin` allowlist |
+| `MQTT_HOST` / `MQTT_BROKER_HOST` | `127.0.0.1` (`mosquitto` in `compose.yaml`) | MQTT broker hostname or IP |
+| `MQTT_PORT` / `MQTT_BROKER_PORT` | `1883` | MQTT broker port |
+| `MQTT_CLIENT_ID` | `<prefix>_backend_<pid>` | MQTT client identifier |
+| `MQTT_USER` / `MQTT_USERNAME` | *(unset)* | Optional MQTT username |
+| `MQTT_PASS` / `MQTT_PASSWORD` | *(unset)* | Optional MQTT password |
+| `MQTT_PREFIX` | `grandfather_clock` | Base MQTT topic prefix |
+| `VITE_WS_URL` | *(auto from `window.location.host`)* | Optional build-time WebSocket URL override for frontend |
+
 See [`backend/README.md`](file:///c:/mhj/git/modern-clock/backend/README.md) for full endpoint specifications, MQTT topics, and WebSocket schemas.
 
 

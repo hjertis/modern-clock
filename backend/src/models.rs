@@ -19,6 +19,46 @@ fn default_duration_ms() -> u64 {
     8000
 }
 
+pub const MAX_TITLE_CHARS: usize = 120;
+pub const MAX_MESSAGE_CHARS: usize = 500;
+pub const MAX_THEME_CHARS: usize = 64;
+
+pub const ALLOWED_CATEGORIES: &[&str] = &[
+    "info",
+    "doorbell",
+    "securityAlert",
+    "alert",
+    "calendar",
+    "weather",
+];
+
+pub fn normalize_category(raw: Option<&str>, priority: NotificationPriority) -> Option<String> {
+    match raw {
+        Some(c) => {
+            let trimmed = c.trim();
+            if trimmed.is_empty() {
+                return Some(default_category(priority).to_string());
+            }
+            ALLOWED_CATEGORIES
+                .iter()
+                .find(|&&allowed| allowed.eq_ignore_ascii_case(trimmed))
+                .map(|&allowed| allowed.to_string())
+        }
+        None => Some(default_category(priority).to_string()),
+    }
+}
+
+pub fn default_category(priority: NotificationPriority) -> &'static str {
+    match priority {
+        NotificationPriority::Urgent => "alert",
+        NotificationPriority::Normal => "info",
+    }
+}
+
+pub fn truncate_chars(s: &str, max_chars: usize) -> String {
+    s.chars().take(max_chars).collect()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NotificationRequest {
@@ -26,6 +66,8 @@ pub struct NotificationRequest {
     pub message: String,
     #[serde(default)]
     pub priority: NotificationPriority,
+    #[serde(default)]
+    pub category: Option<String>,
     #[serde(default = "default_duration_ms")]
     pub duration_ms: u64,
 }
@@ -90,10 +132,8 @@ pub enum BroadcastEvent {
 impl BroadcastEvent {
     pub fn new_notify(req: NotificationRequest) -> Self {
         let id = format!("notif_{}_{}", Utc::now().timestamp_millis(), &Uuid::new_v4().to_string()[..8]);
-        let category = match req.priority {
-            NotificationPriority::Urgent => "alert".to_string(),
-            NotificationPriority::Normal => "info".to_string(),
-        };
+        let category = normalize_category(req.category.as_deref(), req.priority)
+            .unwrap_or_else(|| default_category(req.priority).to_string());
 
         BroadcastEvent::Notify {
             id,

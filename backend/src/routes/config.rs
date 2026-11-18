@@ -7,14 +7,30 @@ use serde_json::json;
 use tracing::{info, warn};
 
 use crate::{
-    models::{BroadcastEvent, ConfigRequest},
-    state::AppState,
+    models::{BroadcastEvent, ConfigRequest, MAX_THEME_CHARS},
+    state::{is_valid_theme_id, AppState},
 };
 
 pub async fn handle_update_config(
     State(state): State<AppState>,
-    Json(payload): Json<ConfigRequest>,
+    Json(mut payload): Json<ConfigRequest>,
 ) -> impl IntoResponse {
+    // Validate theme if provided
+    if let Some(ref theme) = payload.theme {
+        let trimmed = theme.trim().to_string();
+        if !is_valid_theme_id(&trimmed) {
+            warn!(theme = %trimmed, "Invalid or oversized theme supplied");
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "status": "error",
+                    "message": format!("Invalid 'theme'. Must be 1-{} alphanumeric/'_'/'-' characters", MAX_THEME_CHARS)
+                })),
+            );
+        }
+        payload.theme = Some(trimmed);
+    }
+
     // Validate mode if provided
     if let Some(ref mode) = payload.mode {
         let m = mode.to_lowercase();

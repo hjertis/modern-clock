@@ -59,6 +59,9 @@ export class ThreeStage {
   private stageElement: HTMLElement | null = null;
   private isInitialized = false;
   private isDisposed = false;
+  private isContextLost = false;
+  private boundOnContextLost: ((e: Event) => void) | null = null;
+  private boundOnContextRestored: (() => void) | null = null;
 
   private bloomThreshold: number;
   private bloomStrength: number;
@@ -198,6 +201,7 @@ export class ThreeStage {
         this.bloomPass = bloomPass;
         this.outputPass = outputPass;
         this.trackRenderTarget(composer);
+        this.attachContextLossHandlers();
       } else {
         // Headless / Node test fallback
         const fallbackEnvTex = this.createProceduralFallbackEnvTexture();
@@ -376,8 +380,53 @@ export class ThreeStage {
     }
   }
 
+  private attachContextLossHandlers(): void {
+    if (typeof this.domElement.addEventListener !== 'function') return;
+
+    this.detachContextLossHandlers();
+
+    this.boundOnContextLost = (e: Event) => {
+      e.preventDefault();
+      this.isContextLost = true;
+      console.warn('[ThreeStage] WebGL context lost; pausing renders until restored.');
+    };
+
+    this.boundOnContextRestored = () => {
+      if (this.isDisposed) return;
+      this.isContextLost = false;
+      console.info('[ThreeStage] WebGL context restored; rebuilding renderer targets.');
+
+      if (this.renderer) {
+        this.renderer.setSize(this.width, this.height, false);
+        if (this.pmremGenerator) {
+          this.pmremGenerator.compileCubemapShader();
+          this.setEnvironmentFromScene(this.buildHighContrastStudioEnvironmentScene());
+        }
+      }
+      if (this.composer) {
+        this.composer.setSize(this.width, this.height);
+      }
+      this.render();
+    };
+
+    this.domElement.addEventListener('webglcontextlost', this.boundOnContextLost, false);
+    this.domElement.addEventListener('webglcontextrestored', this.boundOnContextRestored, false);
+  }
+
+  private detachContextLossHandlers(): void {
+    if (typeof this.domElement.removeEventListener !== 'function') return;
+    if (this.boundOnContextLost) {
+      this.domElement.removeEventListener('webglcontextlost', this.boundOnContextLost, false);
+      this.boundOnContextLost = null;
+    }
+    if (this.boundOnContextRestored) {
+      this.domElement.removeEventListener('webglcontextrestored', this.boundOnContextRestored, false);
+      this.boundOnContextRestored = null;
+    }
+  }
+
   public render(): void {
-    if (this.isDisposed || !this.isInitialized) return;
+    if (this.isDisposed || !this.isInitialized || this.isContextLost) return;
     if (this.composer) {
       this.composer.render();
     } else if (this.renderer) {
@@ -506,6 +555,7 @@ export class ThreeStage {
     if (this.isDisposed) return;
     this.isDisposed = true;
     this.isInitialized = false;
+    this.detachContextLossHandlers();
 
     // 1. Index anything added directly to the scene before disposal
     this.registerObjectTree(this.scene);

@@ -272,3 +272,304 @@ async fn test_dynamic_ha_discovery_theme_options() {
     assert!(!unchanged);
 }
 
+#[tokio::test]
+async fn test_bearer_token_auth_when_configured() {
+    let state = AppState::with_security(Some("super-secret-token".to_string()), vec![]);
+    let app = create_router(state);
+
+    let payload = serde_json::json!({
+        "title": "Doorbell",
+        "message": "Someone is at the door",
+        "category": "doorbell"
+    });
+
+    // 1. Missing token -> 401
+    let unauth_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/notify")
+                .header("Content-Type", "application/json")
+                .body(Body::from(payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unauth_resp.status(), StatusCode::UNAUTHORIZED);
+
+    // 2. Wrong token -> 401
+    let wrong_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/config")
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer wrong-token")
+                .body(Body::from(r#"{"mode":"tick"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(wrong_resp.status(), StatusCode::UNAUTHORIZED);
+
+    // 3. Valid token -> 200
+    let ok_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/notify")
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer super-secret-token")
+                .body(Body::from(payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ok_resp.status(), StatusCode::OK);
+
+    // 4. Health remains open without token -> 200
+    let health_resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(health_resp.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_payload_bounds_and_category_passthrough() {
+    let state = AppState::with_security(None, vec![]);
+    let mut rx = state.tx.subscribe();
+    let app = create_router(state);
+
+    // 1. Category passthrough
+    let doorbell_payload = serde_json::json!({
+        "title": "Front Door",
+        "message": "Ring",
+        "category": "doorbell",
+        "priority": "normal"
+    });
+    let ok_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/notify")
+                .header("Content-Type", "application/json")
+                .body(Body::from(doorbell_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ok_resp.status(), StatusCode::OK);
+
+    let broadcast_raw = rx.recv().await.unwrap();
+    let broadcast_json: Value = serde_json::from_str(&broadcast_raw).unwrap();
+    assert_eq!(broadcast_json["category"], "doorbell");
+
+    // 2. Oversized title (> 120 chars) -> 400
+    let long_title = serde_json::json!({
+        "title": "a".repeat(121),
+        "message": "ok"
+    });
+    let resp_title = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/notify")
+                .header("Content-Type", "application/json")
+                .body(Body::from(long_title.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp_title.status(), StatusCode::BAD_REQUEST);
+
+    // 3. Oversized message (> 500 chars) -> 400
+    let long_msg = serde_json::json!({
+        "title": "ok",
+        "message": "b".repeat(501)
+    });
+    let resp_msg = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/notify")
+                .header("Content-Type", "application/json")
+                .body(Body::from(long_msg.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp_msg.status(), StatusCode::BAD_REQUEST);
+
+    // 4. Oversized theme (> 64 chars) -> 400
+    let long_theme = serde_json::json!({
+        "theme": "c".repeat(65)
+    });
+    let resp_theme = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/config")
+                .header("Content-Type", "application/json")
+                .body(Body::from(long_theme.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp_theme.status(), StatusCode::BAD_REQUEST);
+
+    // 5. Body > 16 KB -> 413 Payload Too Large
+    let huge_body = format!(r#"{{"title":"t","message":"{}"}}"#, "x".repeat(17 * 1024));
+    let resp_huge = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/notify")
+                .header("Content-Type", "application/json")
+                .body(Body::from(huge_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp_huge.status(), StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[tokio::test]
+async fn test_rate_limiting_and_cors_allowlist() {
+    let state = AppState::with_security(None, vec!["https://clock.example.com".to_string()]);
+    let app = create_router(state);
+
+    // 1. CORS allows configured origin, not arbitrary origin
+    let cors_ok = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/health")
+                .header("Origin", "https://clock.example.com")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        cors_ok.headers().get("access-control-allow-origin").unwrap(),
+        "https://clock.example.com"
+    );
+
+    let cors_denied = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/health")
+                .header("Origin", "https://evil.example.com")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(cors_denied.headers().get("access-control-allow-origin").is_none());
+
+    // 2. Rate limit: 10 requests/sec allowed, 11th rejected with 429
+    for i in 0..10 {
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/config")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(r#"{"mode":"sweep"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK, "request {} should succeed", i);
+    }
+
+    let rate_limited = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/config")
+                .header("Content-Type", "application/json")
+                .body(Body::from(r#"{"mode":"sweep"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(rate_limited.status(), StatusCode::TOO_MANY_REQUESTS);
+}
+
+#[tokio::test]
+async fn test_ws_origin_rejection_and_connection_cap() {
+    let state = AppState::with_security(None, vec![]);
+    let app = create_router(state.clone());
+
+    // Mismatched Origin on WS upgrade -> 403 Forbidden
+    let bad_origin_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/ws")
+                .header("Host", "localhost:8088")
+                .header("Origin", "https://evil.example.com")
+                .header("Connection", "Upgrade")
+                .header("Upgrade", "websocket")
+                .header("Sec-WebSocket-Version", "13")
+                .header("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(bad_origin_resp.status(), StatusCode::FORBIDDEN);
+
+    // At max concurrent WS clients (16) -> 503 Service Unavailable
+    state
+        .active_ws_clients
+        .store(16, std::sync::atomic::Ordering::Relaxed);
+    let capped_resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/ws")
+                .header("Host", "localhost:8088")
+                .header("Origin", "http://localhost:8088")
+                .header("Connection", "Upgrade")
+                .header("Upgrade", "websocket")
+                .header("Sec-WebSocket-Version", "13")
+                .header("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(capped_resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[test]
+fn test_mqtt_exponential_backoff_bounds() {
+    use grandfather_clock_backend::mqtt::compute_reconnect_backoff;
+    use std::time::Duration;
+
+    let b0 = compute_reconnect_backoff(0);
+    assert!(b0 >= Duration::from_secs(1) && b0 < Duration::from_secs(2));
+
+    let b3 = compute_reconnect_backoff(3);
+    assert!(b3 >= Duration::from_secs(8) && b3 < Duration::from_secs(9));
+
+    let b10 = compute_reconnect_backoff(10);
+    assert!(b10 >= Duration::from_secs(60) && b10 < Duration::from_secs(61));
+}
+

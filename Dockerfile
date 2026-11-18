@@ -54,7 +54,9 @@ WORKDIR /app
 # Install CA certificates for secure TLS/MQTT connections
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system appgroup \
+    && useradd --system --gid appgroup --no-create-home --shell /usr/sbin/nologin appuser
 
 # Copy compiled backend binary from Stage 2
 COPY --from=backend-builder /build/target/release/grandfather-clock-backend /app/grandfather-clock
@@ -62,8 +64,11 @@ COPY --from=backend-builder /build/target/release/grandfather-clock-backend /app
 # Copy compiled static frontend distribution from Stage 1
 COPY --from=frontend-builder /app/dist /app/static
 
-# Ensure binary is executable
-RUN chmod +x /app/grandfather-clock
+# Set minimal read-only/execute permissions and drop privileges
+RUN chmod 0555 /app/grandfather-clock \
+    && chmod -R a+rX,go-w /app/static
+
+USER appuser
 
 # Expose unified HTTP and WebSocket port
 EXPOSE 8088
@@ -71,6 +76,9 @@ EXPOSE 8088
 # Default environment variables
 ENV PORT=8088
 ENV STATIC_DIR=/app/static
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["/app/grandfather-clock", "--healthcheck"]
 
 CMD ["/app/grandfather-clock"]
 
