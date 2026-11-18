@@ -139,3 +139,5 @@ dist
 target/
 **/target/
 **/*.rs.bk
+*.code-workspace
+
