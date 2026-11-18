@@ -150,6 +150,10 @@ async function bootstrap() {
       themePillLabel.textContent = '☢️ Chrono-Containment Reactor (T)';
     } else if (themeId === 'orrery_3d') {
       themePillLabel.textContent = '🪐 Celestial Astrolabe & Orrery (T)';
+    } else if (themeId === 'mariana_abyss') {
+      themePillLabel.textContent = '🌊 Mariana Abyss (T)';
+    } else if (themeId === 'vector_oscilloscope') {
+      themePillLabel.textContent = '📈 Vector CRT Oscilloscope (T)';
     } else {
       themePillLabel.textContent = '🕰️ Vienna Classic (T)';
     }

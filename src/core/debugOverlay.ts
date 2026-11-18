@@ -127,7 +127,9 @@ export class DebugOverlay {
                         ? '🪐 '
                         : t.id === 'mariana_abyss'
                           ? '🌊 '
-                          : t.id === 'hybrid_base'
+                          : t.id === 'vector_oscilloscope'
+                            ? '📈 '
+                            : t.id === 'hybrid_base'
                             ? '🎛️ '
                             : '🕰️ '
           }${t.name}
@@ -247,7 +249,10 @@ export class DebugOverlay {
 
         <!-- Live Calibration Sliders / Inputs -->
         <div class="debug-section">
-          <div class="section-title">Dial Center (Canvas 1080×1920)</div>
+          <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Dial Center (Canvas 1080×1920)</span>
+            <button id="btn-reset-dial-center" class="debug-btn" style="padding:2px 8px;font-size:11px;">Reset (540, 540)</button>
+          </div>
           <div class="control-row">
             <label>Dial Center X</label>
             <input type="range" id="input-dial-x" min="0" max="1080" value="${manifest.dial.center.x}" />
@@ -481,6 +486,12 @@ export class DebugOverlay {
     numDialY?.addEventListener('change', (e) =>
       syncDialY(Number((e.target as HTMLInputElement).value))
     );
+
+    const btnResetDialCenter = this.panelElement.querySelector('#btn-reset-dial-center');
+    btnResetDialCenter?.addEventListener('click', () => {
+      syncDialX(540);
+      syncDialY(540);
+    });
 
     // Pendulum Inputs
     const numPendPivotX = this.panelElement.querySelector('#num-pend-pivot-x') as HTMLInputElement;

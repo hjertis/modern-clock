@@ -46,7 +46,7 @@ export const MARIANA_GEOMETRY = {
   ...HYBRID_BASE_GEOMETRY,
   PORTHOLE_CENTER_WORLD: { x: 0, y: 5.1 },
   PORTHOLE_INNER_R: 3.18,
-  PORTHOLE_OUTER_R: 3.74,
+  PORTHOLE_OUTER_R: 3.55,
   TUBE_ZONE_CENTER_WORLD: { x: 0, y: -0.05 },
   TUBE_RADIUS: 0.42,
   TUBE_HEIGHT: 1.38,
@@ -69,7 +69,7 @@ export const MARIANA_ABYSS_MANIFEST: ThemeManifest = {
   background: '',
   dial: {
     image: '',
-    center: { x: HYBRID_BASE_GEOMETRY.DIAL_CENTER.x, y: HYBRID_BASE_GEOMETRY.DIAL_CENTER.y }
+    center: { x: 540, y: 540 }
   },
   hands: {
     hour: {

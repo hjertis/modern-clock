@@ -39,7 +39,6 @@ import {
   createBarnacleGeometry,
   createBathysphereChassisGeometry,
   createClinometerBobGeometry,
-  createCornerGussetGeometry,
   createCurvedLensGeometry,
   createFrayedStrandGeometry,
   createHorologicalBridgeGeometry,
@@ -369,16 +368,15 @@ export class MarianaAbyssTheme implements Theme {
       { swayAmplitude: 0.075, swaySpeed: 1.25 }
     );
 
-    // Zone 01 refractive curved porthole lens (MeshPhysicalMaterial transmission: 0.92, ior: 1.48)
+    // Zone 01 curved porthole glass lens (transparent, low-opacity specular glaze with depthWrite: false)
     const portholeLensMat = new THREE.MeshPhysicalMaterial({
       color: 0xbbeeff,
-      transmission: 0.92,
-      ior: 1.48,
-      thickness: 0.4,
-      roughness: 0.08,
+      roughness: 0.04,
       metalness: 0.0,
       clearcoat: 1.0,
-      clearcoatRoughness: 0.06,
+      clearcoatRoughness: 0.04,
+      transparent: true,
+      opacity: 0.14,
       depthWrite: false
     });
 
@@ -432,7 +430,7 @@ export class MarianaAbyssTheme implements Theme {
     // -----------------------------------------------------------------------
     const chassisGroup = new THREE.Group();
     const surroundBacking = new THREE.Mesh(
-      new THREE.BoxGeometry(24.0, 32.0, 0.3),
+      new THREE.BoxGeometry(44.0, 36.0, 0.3),
       waterloggedOakMat
     );
     surroundBacking.position.set(0, 0, -1.65);
@@ -463,8 +461,8 @@ export class MarianaAbyssTheme implements Theme {
     bottomSill.receiveShadow = true;
     chassisGroup.add(bottomSill);
 
-    const topOverhang = new THREE.Mesh(new THREE.BoxGeometry(10.8, 0.96, 1.15), timberBeamMat);
-    topOverhang.position.set(0, 9.12, 0.44);
+    const topOverhang = new THREE.Mesh(new THREE.BoxGeometry(10.8, 0.96, 0.52), timberBeamMat);
+    topOverhang.position.set(0, 9.12, -0.26);
     topOverhang.castShadow = true;
     topOverhang.receiveShadow = true;
     chassisGroup.add(topOverhang);
@@ -491,7 +489,7 @@ export class MarianaAbyssTheme implements Theme {
     const boltPositions: Array<[number, number, number]> = [];
     for (let i = 0; i < 16; i++) {
       const a = (i / 16) * Math.PI * 2;
-      boltPositions.push([Math.cos(a) * 3.52, 5.1 + Math.sin(a) * 3.52, 0.25]);
+      boltPositions.push([Math.cos(a) * 3.36, 5.1 + Math.sin(a) * 3.36, 0.25]);
     }
     for (const bx of [-4.22, -2.1, 0, 2.1, 4.22]) {
       boltPositions.push([bx, 1.0, 0.14], [bx, -1.1, 0.14]);
@@ -589,34 +587,6 @@ export class MarianaAbyssTheme implements Theme {
     });
     chassisGroup.add(barnacleInst);
 
-    // Chamfered L-shaped corroded-iron corner gussets with contrasting bronze hex bolts
-    const gussetGeo = createCornerGussetGeometry(0.82, 0.24, 0.08);
-    const gussetConfigs: Array<{ x: number; y: number; z: number; rotZ: number; sx: number; sy: number }> = [
-      { x: -4.44, y: 8.62, z: 0.56, rotZ: 0, sx: 1, sy: 1 },
-      { x: 4.44, y: 8.62, z: 0.56, rotZ: -Math.PI * 0.5, sx: -1, sy: 1 },
-      { x: -4.44, y: -8.62, z: 0.56, rotZ: Math.PI * 0.5, sx: 1, sy: -1 },
-      { x: 4.44, y: -8.62, z: 0.56, rotZ: Math.PI, sx: -1, sy: -1 }
-    ];
-    for (const gc of gussetConfigs) {
-      const gusset = new THREE.Mesh(gussetGeo, corrodedIronMat);
-      gusset.position.set(gc.x, gc.y, gc.z);
-      gusset.rotation.z = gc.rotZ;
-      gusset.castShadow = true;
-      gusset.receiveShadow = true;
-      chassisGroup.add(gusset);
-
-      for (const [ox, oy] of [
-        [0.12, -0.12],
-        [0.52, -0.12],
-        [0.12, -0.52]
-      ]) {
-        const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.07, 6), bronzeMat);
-        bolt.rotation.x = Math.PI * 0.5;
-        bolt.position.set(gc.x + ox * gc.sx, gc.y + oy * gc.sy, gc.z + 0.11);
-        chassisGroup.add(bolt);
-      }
-    }
-
     // 3D swaying kelp/seaweed ribbons driven by vertex-shader underwater current wave
     const kelpSpots: Array<[number, number, number, number, number]> = [
       [-4.42, 8.5, 0.56, 0.28, 2.6],
@@ -702,9 +672,10 @@ export class MarianaAbyssTheme implements Theme {
     portholeGroup.position.set(0, 5.1, 0);
 
     const portholeBezel = new THREE.Mesh(
-      createPortholeBezelGeometry(3.16, 3.74, 0.52),
+      createPortholeBezelGeometry(3.16, 3.55, 0.52),
       bronzeMat
     );
+    portholeBezel.position.z = 0.02;
     portholeBezel.castShadow = true;
     portholeBezel.receiveShadow = true;
     portholeGroup.add(portholeBezel);
@@ -822,7 +793,7 @@ export class MarianaAbyssTheme implements Theme {
 
     // 3D Extruded Hands + Central Cap
     this.hourHandPivot = new THREE.Group();
-    this.hourHandPivot.position.z = -0.46;
+    this.hourHandPivot.position.z = -0.40;
     const hourMesh = new THREE.Mesh(createTritiumHandGeometry(1.78, 0.22, 0.06), bronzeMat);
     hourMesh.castShadow = true;
     const hourInlay = new THREE.Mesh(new THREE.BoxGeometry(0.055, 1.05, 0.072), tritiumMat);
@@ -831,7 +802,7 @@ export class MarianaAbyssTheme implements Theme {
     portholeGroup.add(this.hourHandPivot);
 
     this.minuteHandPivot = new THREE.Group();
-    this.minuteHandPivot.position.z = -0.36;
+    this.minuteHandPivot.position.z = -0.30;
     const minMesh = new THREE.Mesh(createTritiumHandGeometry(2.45, 0.17, 0.05), steelMat);
     minMesh.castShadow = true;
     const minInlay = new THREE.Mesh(new THREE.BoxGeometry(0.042, 1.65, 0.062), tritiumMat);
@@ -840,7 +811,7 @@ export class MarianaAbyssTheme implements Theme {
     portholeGroup.add(this.minuteHandPivot);
 
     this.secondHandPivot = new THREE.Group();
-    this.secondHandPivot.position.z = -0.26;
+    this.secondHandPivot.position.z = -0.20;
     const secMesh = new THREE.Mesh(new THREE.BoxGeometry(0.035, 2.85, 0.03), tritiumMat);
     secMesh.position.y = 0.85;
     this.secondHandPivot.add(secMesh);
@@ -848,12 +819,12 @@ export class MarianaAbyssTheme implements Theme {
 
     const centerCap = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 0.14, 24), bronzeMat);
     centerCap.rotation.x = Math.PI * 0.5;
-    centerCap.position.z = -0.22;
+    centerCap.position.z = -0.16;
     portholeGroup.add(centerCap);
 
-    // Thick convex refractive glass porthole lens (MeshPhysicalMaterial transmission: 0.92, ior: 1.48)
-    const lensMesh = new THREE.Mesh(createCurvedLensGeometry(3.16, 0.28), portholeLensMat);
-    lensMesh.position.z = 0.06;
+    // Subtle convex glass porthole lens positioned behind the hands so hands stay crisp and unobstructed
+    const lensMesh = new THREE.Mesh(createCurvedLensGeometry(3.16, 0.06), portholeLensMat);
+    lensMesh.position.z = -0.51;
     portholeGroup.add(lensMesh);
 
     const portholeLight = new THREE.PointLight(MARIANA_COLORS.BIOLUM_CYAN, 2.1, 6.5, 1.6);

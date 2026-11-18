@@ -15,6 +15,7 @@ export type ThemeId =
   | 'reactor_3d'
   | 'orrery_3d'
   | 'mariana_abyss'
+  | 'vector_oscilloscope'
   | string;
 
 export interface ThemeConfig {
@@ -86,11 +87,59 @@ export interface TelemetryData {
 }
 
 export interface ThemeEvent {
-  type: 'notification' | 'mqtt_pulse' | 'priority_alert' | 'config_change' | 'chime' | 'mode_change';
+  type:
+    | 'notification'
+    | 'mqtt_pulse'
+    | 'priority_alert'
+    | 'config_change'
+    | 'chime'
+    | 'mode_change'
+    | 'doorbell'
+    | 'securityAlert';
   priority?: 'normal' | 'urgent';
-  category?: 'alert' | 'info' | 'doorbell' | 'calendar' | 'weather';
+  category?: 'alert' | 'info' | 'doorbell' | 'calendar' | 'weather' | 'securityAlert';
   payload?: NotificationPayload | Record<string, unknown>;
   timestamp?: number;
+}
+
+export type ThemeRendererType = '2d' | 'three';
+
+/**
+ * Standardized ClockTheme interface for new 2D Canvas and Three.js themes.
+ * Reduces boilerplate by unifying lifecycle, presence modes, dial calibration,
+ * and reactive telemetry events.
+ */
+export interface ClockTheme {
+  /** Unique snake_case identifier (e.g., 'vienna_classic', 'my_theme') */
+  readonly id: string;
+  /** Human-readable display name shown in the theme switcher */
+  readonly name: string;
+  /** Rendering backend used by this theme */
+  readonly renderer: ThemeRendererType;
+
+  /** Initialize canvas/WebGL resources, scene graph, and manifest */
+  init(config?: ThemeConfig, canvasContext?: CanvasRenderingContext2D): void | Promise<void>;
+
+  /** Advance animations and render a frame */
+  update(timeState: TimeData, delta: number, physicsState?: PhysicsData): void;
+
+  /** Handle viewport/stage dimension updates */
+  resize(width?: number, height?: number): void;
+
+  /** Apply one of the 4 presence states ('active' | 'silent' | 'night' | 'sleep') */
+  setPresenceMode(mode: ClockMode): void;
+
+  /** Move the dial assembly relative to the 540, 540 baseline on a 1080×1920 canvas */
+  setDialCenter(x: number, y: number): void;
+
+  /** Handle reactive telemetry events (e.g., doorbell, securityAlert, mode_change) */
+  onEvent(event: ThemeEvent): void;
+
+  /** Dispose all WebGL/canvas resources and event listeners */
+  dispose(): void;
+
+  /** Optional theme geometry manifest for HUD calibration compatibility */
+  getManifest?(): ThemeManifest;
 }
 
 /**

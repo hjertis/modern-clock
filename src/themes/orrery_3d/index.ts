@@ -30,7 +30,7 @@ export const ORRERY_3D_MANIFEST: ThemeManifest = {
   background: '',
   dial: {
     image: '',
-    center: { x: 540, y: 530 }
+    center: { x: 540, y: 540 }
   },
   hands: {
     hour: {
@@ -541,10 +541,7 @@ export class Orrery3DTheme implements Theme {
     scene.add(this.grazingRimSpotlight);
     scene.add(this.grazingRimSpotlight.target);
 
-    const dialWorld = ThreeStage.canvasToWorldXY(
-      this.manifest.dial.center.x,
-      this.manifest.dial.center.y
-    );
+    const dialWorld = ThreeStage.canvasToWorldXY(540, 530);
 
     // Central Solar PointLight illuminating planetary spheres for true day/night terminators
     this.solarPointLight = new THREE.PointLight(0xffcb6e, 36.0, 12.0, 1.4);

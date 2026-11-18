@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "tsx tests/sleepManager.test.ts && tsx tests/hybridBase.test.ts"
+    "test": "tsx tests/sleepManager.test.ts && tsx tests/hybridBase.test.ts && tsx tests/themeArchitecture.test.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.15",

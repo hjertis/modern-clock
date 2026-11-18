@@ -1,5 +1,6 @@
 import { ThemeManifest } from '../types/theme';
-import { Theme, ThemeConfig, ThemeEvent } from './types';
+import { ClockTheme, Theme, ThemeConfig, ThemeEvent } from './types';
+import { adaptClockThemeToTheme, isClockTheme } from './helpers';
 import { ViennaClassicTheme } from './viennaClassic';
 import { Pcb2049Theme } from './pcb2049';
 import { HybridBaseTheme } from './hybrid_base';
@@ -8,9 +9,11 @@ import { Tourbillon3DTheme } from './tourbillon_3d';
 import { Reactor3DTheme } from './reactor_3d';
 import { Orrery3DTheme } from './orrery_3d';
 import { MarianaAbyssTheme } from './mariana_abyss';
+import { VectorOscilloscopeTheme } from './vector-oscilloscope';
 import { ClockAudioEngine } from '../core/audioEngine';
 
 export type ThemeFactory = () => Theme;
+export type AnyThemeOrFactory = Theme | ClockTheme | (() => Theme | ClockTheme);
 
 export interface ThemeDescriptor {
   id: string;
@@ -61,16 +64,24 @@ export class ThemeManager {
     this.registerTheme(() => new Reactor3DTheme());
     this.registerTheme(() => new Orrery3DTheme());
     this.registerTheme(() => new MarianaAbyssTheme());
+    this.registerTheme(() => new VectorOscilloscopeTheme());
   }
 
 
   /**
    * Registers a theme instance or factory into the ThemeManager registry.
+   * Supports both legacy `Theme` and unified `ClockTheme` implementations.
    */
-  public registerTheme(themeOrFactory: Theme | ThemeFactory): void {
-    const sample = typeof themeOrFactory === 'function' ? themeOrFactory() : themeOrFactory;
+  public registerTheme(themeOrFactory: AnyThemeOrFactory): void {
+    const rawSample = typeof themeOrFactory === 'function' ? themeOrFactory() : themeOrFactory;
+    const sample = isClockTheme(rawSample) ? adaptClockThemeToTheme(rawSample) : rawSample;
     const factory: ThemeFactory =
-      typeof themeOrFactory === 'function' ? themeOrFactory : () => themeOrFactory;
+      typeof themeOrFactory === 'function'
+        ? () => {
+            const instance = themeOrFactory();
+            return isClockTheme(instance) ? adaptClockThemeToTheme(instance) : instance;
+          }
+        : () => sample;
 
     this.registry.set(sample.id, {
       descriptor: { id: sample.id, name: sample.name },
@@ -203,6 +214,14 @@ export class ThemeManager {
       cleaned === 'abyss'
     ) {
       return 'mariana_abyss';
+    }
+    if (
+      cleaned === 'vector_oscilloscope' ||
+      cleaned === 'oscilloscope' ||
+      cleaned === 'vector_crt' ||
+      cleaned === 'vector_crt_oscilloscope'
+    ) {
+      return 'vector_oscilloscope';
     }
 
     // Match by display name

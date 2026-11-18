@@ -84,7 +84,7 @@ export const PCB_2049_MANIFEST: ThemeManifest = {
   background: '',
   dial: {
     image: '',
-    center: { x: PCB_GEOMETRY.DIAL_CENTER.x, y: PCB_GEOMETRY.DIAL_CENTER.y }
+    center: { x: 540, y: 540 }
   },
   hands: {
     hour: {
