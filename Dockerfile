@@ -36,15 +36,15 @@ RUN mkdir -p src \
     && echo "fn main() {}" > src/main.rs \
     && cargo build --release \
     && rm -rf src \
-       target/release/.fingerprint/grandfather-clock-backend* \
-       target/release/deps/grandfather_clock_backend* \
-       target/release/deps/grandfather-clock-backend* \
-       target/release/libgrandfather_clock_backend* \
+       target/release/.fingerprint/grandfather* \
+       target/release/deps/grandfather* \
+       target/release/deps/libgrandfather* \
+       target/release/libgrandfather* \
        target/release/grandfather-clock-backend*
 
 # Copy actual Rust backend source files and compile release binary
 COPY backend/src/ ./src/
-RUN cargo build --release
+RUN find src -type f -exec touch {} + && cargo build --release
 
 # ==============================================================================
 # Stage 3: Minimal Production Runtime
