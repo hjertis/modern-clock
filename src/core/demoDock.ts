@@ -128,13 +128,22 @@ export class DemoDock {
     notifGroup.appendChild(btnDoorbell);
     notifGroup.appendChild(btnAlert);
 
-    // 4. Optional Calibration HUD toggle
+    // 4. Optional Calibration HUD toggle & GitHub repo link
     const hudGroup = this.createGroup();
     const btnHud = this.createButton('HUD', 'demo-dock-btn', () => {
       this.debugOverlay?.toggleHUD();
     });
     btnHud.title = 'Toggle Calibration HUD (H)';
     hudGroup.appendChild(btnHud);
+
+    const repoLink = document.createElement('a');
+    repoLink.className = 'demo-dock-btn demo-dock-link';
+    repoLink.href = 'https://github.com/hjertis/modern-clock';
+    repoLink.target = '_blank';
+    repoLink.rel = 'noopener noreferrer';
+    repoLink.title = 'View source on GitHub';
+    repoLink.textContent = 'GitHub ↗';
+    hudGroup.appendChild(repoLink);
 
     this.dockElement.replaceChildren(themeGroup, modeGroup, notifGroup, hudGroup);
   }

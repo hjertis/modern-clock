@@ -177,3 +177,9 @@ body.kiosk-cursor-hidden * {
   border-color: rgba(248, 113, 113, 0.45);
   color: #fca5a5;
 }
+
+.demo-dock-link {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
