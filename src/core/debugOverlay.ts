@@ -18,6 +18,7 @@ export class DebugOverlay {
   private wsClient?: ClockWebSocketClient;
   private audioEngine?: ClockAudioEngine;
   private sleepManager?: SleepManager;
+  private onVisibilityChange?: (visible: boolean) => void;
   private isVisible = false;
   private showCrosshairs = false;
 
@@ -30,7 +31,8 @@ export class DebugOverlay {
     wsClient?: ClockWebSocketClient,
     themeManager?: ThemeManager,
     audioEngine?: ClockAudioEngine,
-    sleepManager?: SleepManager
+    sleepManager?: SleepManager,
+    onVisibilityChange?: (visible: boolean) => void
   ) {
     this.container = container;
     this.crosshairsLayer = crosshairsLayer;
@@ -41,6 +43,7 @@ export class DebugOverlay {
     this.themeManager = themeManager;
     this.audioEngine = audioEngine;
     this.sleepManager = sleepManager || clockEngine.getSleepManager() || undefined;
+    this.onVisibilityChange = onVisibilityChange;
 
     if (this.sleepManager) {
       this.sleepManager.onModeChange(() => {
@@ -99,6 +102,64 @@ export class DebugOverlay {
     });
   }
 
+  private el<K extends keyof HTMLElementTagNameMap>(
+    tag: K,
+    opts?: {
+      id?: string;
+      className?: string;
+      text?: string;
+      title?: string;
+      attrs?: Record<string, string>;
+      style?: Partial<CSSStyleDeclaration>;
+    },
+    children?: Array<Node | null | undefined>
+  ): HTMLElementTagNameMap[K] {
+    const node = document.createElement(tag);
+    if (opts?.id) node.id = opts.id;
+    if (opts?.className) node.className = opts.className;
+    if (opts?.text !== undefined) node.textContent = opts.text;
+    if (opts?.title) node.title = opts.title;
+    if (opts?.attrs) {
+      for (const [k, v] of Object.entries(opts.attrs)) {
+        node.setAttribute(k, v);
+      }
+    }
+    if (opts?.style) {
+      Object.assign(node.style, opts.style);
+    }
+    if (children) {
+      for (const child of children) {
+        if (child) node.appendChild(child);
+      }
+    }
+    return node;
+  }
+
+  private getThemeIcon(themeId: string): string {
+    switch (themeId) {
+      case 'pcb_2049':
+        return '⚡ ';
+      case 'pcb_2049_emerald':
+        return '🟢 ';
+      case 'nixie_hybrid':
+        return '🔥 ';
+      case 'tourbillon_3d':
+        return '⚙️ ';
+      case 'reactor_3d':
+        return '☢️ ';
+      case 'orrery_3d':
+        return '🪐 ';
+      case 'mariana_abyss':
+        return '🌊 ';
+      case 'vector_oscilloscope':
+        return '📈 ';
+      case 'hybrid_base':
+        return '🎛️ ';
+      default:
+        return '🕰️ ';
+    }
+  }
+
   private renderPanelContent(manifest: ThemeManifest): void {
     const activeThemeId = this.themeManager?.getActiveThemeId() || 'pcb_2049';
     const availableThemes = this.themeManager?.getAvailableThemes() || [
@@ -106,187 +167,240 @@ export class DebugOverlay {
       { id: 'vienna_classic', name: 'Vienna Classic' }
     ];
 
-    const themeButtonsHtml = availableThemes
-      .map(
-        (t) => `
-        <button data-theme-id="${t.id}" class="debug-btn theme-select-btn ${
-          t.id === activeThemeId ? 'active' : ''
-        }">
-          ${
-            t.id === 'pcb_2049'
-              ? '⚡ '
-              : t.id === 'pcb_2049_emerald'
-                ? '🟢 '
-                : t.id === 'nixie_hybrid'
-                  ? '🔥 '
-                  : t.id === 'tourbillon_3d'
-                    ? '⚙️ '
-                    : t.id === 'reactor_3d'
-                      ? '☢️ '
-                      : t.id === 'orrery_3d'
-                        ? '🪐 '
-                        : t.id === 'mariana_abyss'
-                          ? '🌊 '
-                          : t.id === 'vector_oscilloscope'
-                            ? '📈 '
-                            : t.id === 'hybrid_base'
-                            ? '🎛️ '
-                            : '🕰️ '
-          }${t.name}
-        </button>
-      `
+    const makeStat = (label: string, valueId: string, initialText: string) =>
+      this.el('div', { className: 'debug-stat' }, [
+        this.el('span', { className: 'stat-label', text: label }),
+        this.el('span', { id: valueId, className: 'stat-value font-mono', text: initialText })
+      ]);
+
+    const makeSection = (titleEl: HTMLElement | string, ...content: HTMLElement[]) =>
+      this.el('div', { className: 'debug-section' }, [
+        typeof titleEl === 'string'
+          ? this.el('div', { className: 'section-title', text: titleEl })
+          : titleEl,
+        ...content
+      ]);
+
+    const header = this.el('div', { className: 'debug-header' }, [
+      this.el('div', { className: 'debug-title' }, [
+        this.el('span', { className: 'debug-badge', text: 'DEV HUD' }),
+        this.el('h3', { text: 'Clock Architecture & Calibration' })
+      ]),
+      this.el('div', { className: 'debug-actions-top' }, [
+        this.el('button', {
+          id: 'btn-toggle-crosshairs',
+          className: `debug-btn-sm ${this.showCrosshairs ? 'active' : ''}`.trim(),
+          text: `Crosshairs: ${this.showCrosshairs ? 'ON' : 'OFF'}`
+        }),
+        this.el('button', {
+          id: 'btn-close-hud',
+          className: 'debug-btn-icon',
+          title: 'Hide HUD (Press H)',
+          text: '✕'
+        })
+      ])
+    ]);
+
+    const statusRow = this.el('div', { className: 'debug-status-row' }, [
+      makeStat('Simulated Time', 'debug-time-readout', '--:--:--.---'),
+      makeStat('Pendulum θ', 'debug-pendulum-readout', '0.00°'),
+      makeStat('Frame Rate', 'debug-fps-readout', '60.0 FPS'),
+      makeStat('Mode', 'debug-mode-readout', this.clockEngine.getSecondMode().toUpperCase()),
+      makeStat(
+        'WebSocket',
+        'debug-ws-readout',
+        this.wsClient ? this.wsClient.getStatus().toUpperCase() : 'DISABLED'
       )
-      .join('');
+    ]);
 
+    const themeGrid = this.el(
+      'div',
+      { className: 'debug-button-grid' },
+      availableThemes.map((t) =>
+        this.el('button', {
+          className: `debug-btn theme-select-btn ${t.id === activeThemeId ? 'active' : ''}`.trim(),
+          attrs: { 'data-theme-id': t.id },
+          text: `${this.getThemeIcon(t.id)}${t.name}`
+        })
+      )
+    );
 
-    this.panelElement.innerHTML = `
-      <div class="debug-header">
-        <div class="debug-title">
-          <span class="debug-badge">DEV HUD</span>
-          <h3>Clock Architecture & Calibration</h3>
-        </div>
-        <div class="debug-actions-top">
-          <button id="btn-toggle-crosshairs" class="debug-btn-sm ${this.showCrosshairs ? 'active' : ''}">
-            Crosshairs: ${this.showCrosshairs ? 'ON' : 'OFF'}
-          </button>
-          <button id="btn-close-hud" class="debug-btn-icon" title="Hide HUD (Press H)">✕</button>
-        </div>
-      </div>
+    const activeSleepMode = this.sleepManager?.getMode();
+    const modeGrid = this.el('div', { className: 'debug-button-grid' }, [
+      this.el('button', {
+        id: 'btn-mode-active',
+        className: `debug-btn mode-btn ${activeSleepMode === 'active' ? 'active' : ''}`.trim(),
+        text: '☀️ Active'
+      }),
+      this.el('button', {
+        id: 'btn-mode-silent',
+        className: `debug-btn mode-btn ${activeSleepMode === 'silent' ? 'active' : ''}`.trim(),
+        text: '🤫 Silent'
+      }),
+      this.el('button', {
+        id: 'btn-mode-night',
+        className: `debug-btn mode-btn ${activeSleepMode === 'night' ? 'active' : ''}`.trim(),
+        text: '🌙 Night (30 FPS)'
+      }),
+      this.el('button', {
+        id: 'btn-mode-sleep',
+        className: `debug-btn mode-btn ${activeSleepMode === 'sleep' ? 'active' : ''}`.trim(),
+        text: '💤 Sleep (Cat-Safe 1 FPS)'
+      })
+    ]);
 
-      <div class="debug-body">
-        <!-- Live Status Bar -->
-        <div class="debug-status-row">
-          <div class="debug-stat">
-            <span class="stat-label">Simulated Time</span>
-            <span id="debug-time-readout" class="stat-value font-mono">--:--:--.---</span>
-          </div>
-          <div class="debug-stat">
-            <span class="stat-label">Pendulum θ</span>
-            <span id="debug-pendulum-readout" class="stat-value font-mono">0.00°</span>
-          </div>
-          <div class="debug-stat">
-            <span class="stat-label">Frame Rate</span>
-            <span id="debug-fps-readout" class="stat-value font-mono">60.0 FPS</span>
-          </div>
-          <div class="debug-stat">
-            <span class="stat-label">Mode</span>
-            <span id="debug-mode-readout" class="stat-value font-mono">${this.clockEngine.getSecondMode().toUpperCase()}</span>
-          </div>
-          <div class="debug-stat">
-            <span class="stat-label">WebSocket</span>
-            <span id="debug-ws-readout" class="stat-value font-mono">${this.wsClient ? this.wsClient.getStatus().toUpperCase() : 'DISABLED'}</span>
-          </div>
-        </div>
+    const actionsGrid = this.el('div', { className: 'debug-button-grid' }, [
+      this.el('button', {
+        id: 'btn-doorbell',
+        className: 'debug-btn debug-btn-accent',
+        text: '🔔 Doorbell + Electron Pulse'
+      }),
+      this.el('button', {
+        id: 'btn-urgent-alert',
+        className: 'debug-btn debug-btn-danger',
+        text: '🚨 Priority Security Alert'
+      }),
+      this.el('button', {
+        id: 'btn-toggle-mode',
+        className: 'debug-btn',
+        text: '⏱ Toggle Tick / Sweep'
+      }),
+      this.el('button', {
+        id: 'btn-fast-forward',
+        className: 'debug-btn',
+        text: '⏩ 10x Fast-Forward'
+      })
+    ]);
 
-        <!-- Theme Selector -->
-        <div class="debug-section">
-          <div class="section-title">Active Theme Engine</div>
-          <div class="debug-button-grid">
-            ${themeButtonsHtml}
-          </div>
-        </div>
+    const volumePct = Math.round((this.audioEngine?.getVolume() ?? 0.5) * 100);
+    const audioGrid = this.el('div', { className: 'debug-button-grid' }, [
+      this.el('button', {
+        id: 'btn-toggle-mute',
+        className: `debug-btn ${this.audioEngine?.getMuted() ? 'active' : ''}`.trim(),
+        text: this.audioEngine?.getMuted() ? '🔇 Audio Muted' : '🔊 Audio Active'
+      }),
+      this.el('button', {
+        id: 'btn-toggle-chimes',
+        className: `debug-btn ${this.audioEngine?.getChimesEnabled() ? 'active' : ''}`.trim(),
+        text: this.audioEngine?.getChimesEnabled() ? '🔔 Chimes: ON' : '🔕 Chimes: OFF'
+      }),
+      this.el('button', {
+        id: 'btn-test-tick',
+        className: 'debug-btn',
+        text: '⏱ Test Escapement'
+      }),
+      this.el('button', {
+        id: 'btn-test-chime',
+        className: 'debug-btn',
+        text: '🎵 Test Hour Chime'
+      })
+    ]);
 
-        <!-- Power & Presence States -->
-        <div class="debug-section">
-          <div class="section-title">Power & Presence States</div>
-          <div class="debug-button-grid">
-            <button id="btn-mode-active" class="debug-btn mode-btn ${this.sleepManager?.getMode() === 'active' ? 'active' : ''}">
-              ☀️ Active
-            </button>
-            <button id="btn-mode-silent" class="debug-btn mode-btn ${this.sleepManager?.getMode() === 'silent' ? 'active' : ''}">
-              🤫 Silent
-            </button>
-            <button id="btn-mode-night" class="debug-btn mode-btn ${this.sleepManager?.getMode() === 'night' ? 'active' : ''}">
-              🌙 Night (30 FPS)
-            </button>
-            <button id="btn-mode-sleep" class="debug-btn mode-btn ${this.sleepManager?.getMode() === 'sleep' ? 'active' : ''}">
-              💤 Sleep (Cat-Safe 1 FPS)
-            </button>
-          </div>
-        </div>
+    const volumeRow = this.el('div', { className: 'control-row', style: { marginTop: '8px' } }, [
+      this.el('label', undefined, [
+        document.createTextNode('Master Volume: '),
+        this.el('span', { id: 'debug-volume-val', text: `${volumePct}%` })
+      ]),
+      this.el('input', {
+        id: 'input-audio-volume',
+        attrs: { type: 'range', min: '0', max: '100', value: String(volumePct) }
+      })
+    ]);
 
-        <!-- Quick Action Buttons -->
-        <div class="debug-section">
-          <div class="section-title">Reactive Telemetry & Actions</div>
-          <div class="debug-button-grid">
-            <button id="btn-doorbell" class="debug-btn debug-btn-accent">
-              🔔 Doorbell + Electron Pulse
-            </button>
-            <button id="btn-urgent-alert" class="debug-btn debug-btn-danger">
-              🚨 Priority Security Alert
-            </button>
-            <button id="btn-toggle-mode" class="debug-btn">
-              ⏱ Toggle Tick / Sweep
-            </button>
-            <button id="btn-fast-forward" class="debug-btn">
-              ⏩ 10x Fast-Forward
-            </button>
-          </div>
-        </div>
+    const dialTitle = this.el(
+      'div',
+      {
+        className: 'section-title',
+        style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
+      },
+      [
+        this.el('span', { text: 'Dial Center (Canvas 1080×1920)' }),
+        this.el('button', {
+          id: 'btn-reset-dial-center',
+          className: 'debug-btn',
+          style: { padding: '2px 8px', fontSize: '11px' },
+          text: 'Reset (540, 540)'
+        })
+      ]
+    );
 
-        <!-- Procedural Web Audio Engine Controls -->
-        <div class="debug-section">
-          <div class="section-title">Procedural Web Audio Engine (Zero External Audio)</div>
-          <div class="debug-button-grid">
-            <button id="btn-toggle-mute" class="debug-btn ${this.audioEngine?.getMuted() ? 'active' : ''}">
-              ${this.audioEngine?.getMuted() ? '🔇 Audio Muted' : '🔊 Audio Active'}
-            </button>
-            <button id="btn-toggle-chimes" class="debug-btn ${this.audioEngine?.getChimesEnabled() ? 'active' : ''}">
-              ${this.audioEngine?.getChimesEnabled() ? '🔔 Chimes: ON' : '🔕 Chimes: OFF'}
-            </button>
-            <button id="btn-test-tick" class="debug-btn">
-              ⏱ Test Escapement
-            </button>
-            <button id="btn-test-chime" class="debug-btn">
-              🎵 Test Hour Chime
-            </button>
-          </div>
-          <div class="control-row" style="margin-top: 8px;">
-            <label>Master Volume: <span id="debug-volume-val">${Math.round((this.audioEngine?.getVolume() ?? 0.5) * 100)}%</span></label>
-            <input type="range" id="input-audio-volume" min="0" max="100" value="${Math.round((this.audioEngine?.getVolume() ?? 0.5) * 100)}" />
-          </div>
-        </div>
+    const dialRowX = this.el('div', { className: 'control-row' }, [
+      this.el('label', { text: 'Dial Center X' }),
+      this.el('input', {
+        id: 'input-dial-x',
+        attrs: { type: 'range', min: '0', max: '1080', value: String(manifest.dial.center.x) }
+      }),
+      this.el('input', {
+        id: 'num-dial-x',
+        className: 'control-num',
+        attrs: { type: 'number', min: '0', max: '1080', value: String(manifest.dial.center.x) }
+      })
+    ]);
 
-        <!-- Live Calibration Sliders / Inputs -->
-        <div class="debug-section">
-          <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
-            <span>Dial Center (Canvas 1080×1920)</span>
-            <button id="btn-reset-dial-center" class="debug-btn" style="padding:2px 8px;font-size:11px;">Reset (540, 540)</button>
-          </div>
-          <div class="control-row">
-            <label>Dial Center X</label>
-            <input type="range" id="input-dial-x" min="0" max="1080" value="${manifest.dial.center.x}" />
-            <input type="number" id="num-dial-x" class="control-num" min="0" max="1080" value="${manifest.dial.center.x}" />
-          </div>
-          <div class="control-row">
-            <label>Dial Center Y</label>
-            <input type="range" id="input-dial-y" min="0" max="1920" value="${manifest.dial.center.y}" />
-            <input type="number" id="num-dial-y" class="control-num" min="0" max="1920" value="${manifest.dial.center.y}" />
-          </div>
-        </div>
+    const dialRowY = this.el('div', { className: 'control-row' }, [
+      this.el('label', { text: 'Dial Center Y' }),
+      this.el('input', {
+        id: 'input-dial-y',
+        attrs: { type: 'range', min: '0', max: '1920', value: String(manifest.dial.center.y) }
+      }),
+      this.el('input', {
+        id: 'num-dial-y',
+        className: 'control-num',
+        attrs: { type: 'number', min: '0', max: '1920', value: String(manifest.dial.center.y) }
+      })
+    ]);
 
-        <div class="debug-section">
-          <div class="section-title">Pendulum Physics & Hinge</div>
-          <div class="control-row">
-            <label>Pivot X (Canvas)</label>
-            <input type="number" id="num-pend-pivot-x" class="control-num" value="${manifest.pendulum.pivot.x}" />
-            <label>Pivot Y (Canvas)</label>
-            <input type="number" id="num-pend-pivot-y" class="control-num" value="${manifest.pendulum.pivot.y}" />
-          </div>
-          <div class="control-row">
-            <label>Period T (sec)</label>
-            <input type="number" id="num-pend-period" class="control-num" step="0.1" value="${manifest.pendulum.periodSeconds}" />
-            <label>Max θ (deg)</label>
-            <input type="number" id="num-pend-angle" class="control-num" step="0.5" value="${manifest.pendulum.maxAngleDeg}" />
-          </div>
-        </div>
-      </div>
+    const pendRow1 = this.el('div', { className: 'control-row' }, [
+      this.el('label', { text: 'Pivot X (Canvas)' }),
+      this.el('input', {
+        id: 'num-pend-pivot-x',
+        className: 'control-num',
+        attrs: { type: 'number', value: String(manifest.pendulum.pivot.x) }
+      }),
+      this.el('label', { text: 'Pivot Y (Canvas)' }),
+      this.el('input', {
+        id: 'num-pend-pivot-y',
+        className: 'control-num',
+        attrs: { type: 'number', value: String(manifest.pendulum.pivot.y) }
+      })
+    ]);
 
-      <div class="debug-footer">
-        <span class="shortcut-tip">Press <kbd>H</kbd> to toggle HUD  •  <kbd>T</kbd> to switch Theme</span>
-      </div>
-    `;
+    const pendRow2 = this.el('div', { className: 'control-row' }, [
+      this.el('label', { text: 'Period T (sec)' }),
+      this.el('input', {
+        id: 'num-pend-period',
+        className: 'control-num',
+        attrs: { type: 'number', step: '0.1', value: String(manifest.pendulum.periodSeconds) }
+      }),
+      this.el('label', { text: 'Max θ (deg)' }),
+      this.el('input', {
+        id: 'num-pend-angle',
+        className: 'control-num',
+        attrs: { type: 'number', step: '0.5', value: String(manifest.pendulum.maxAngleDeg) }
+      })
+    ]);
 
+    const body = this.el('div', { className: 'debug-body' }, [
+      statusRow,
+      makeSection('Active Theme Engine', themeGrid),
+      makeSection('Power & Presence States', modeGrid),
+      makeSection('Reactive Telemetry & Actions', actionsGrid),
+      makeSection('Procedural Web Audio Engine (Zero External Audio)', audioGrid, volumeRow),
+      makeSection(dialTitle, dialRowX, dialRowY),
+      makeSection('Pendulum Physics & Hinge', pendRow1, pendRow2)
+    ]);
+
+    const footer = this.el('div', { className: 'debug-footer' }, [
+      this.el('span', { className: 'shortcut-tip' }, [
+        document.createTextNode('Press '),
+        this.el('kbd', { text: 'H' }),
+        document.createTextNode(' to toggle HUD  •  '),
+        this.el('kbd', { text: 'T' }),
+        document.createTextNode(' to switch Theme')
+      ])
+    ]);
+
+    this.panelElement.replaceChildren(header, body, footer);
     this.attachEventListeners();
   }
 
@@ -518,7 +632,7 @@ export class DebugOverlay {
    */
   public updateCrosshairs(): void {
     if (!this.showCrosshairs) {
-      this.crosshairsLayer.innerHTML = '';
+      this.crosshairsLayer.replaceChildren();
       return;
     }
 
@@ -531,39 +645,48 @@ export class DebugOverlay {
     const pendPivotY = manifest.pendulum.pivot.y;
     const notif = manifest.notificationZone;
 
-    this.crosshairsLayer.innerHTML = `
-      <svg viewBox="0 0 1080 1920" width="1080" height="1920" style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;">
-        <!-- Center Dial Crosshairs -->
-        <g id="debug-dial-crosshair">
-          <line x1="${dialX - 40}" y1="${dialY}" x2="${dialX + 40}" y2="${dialY}" stroke="#ff3b30" stroke-width="2" />
-          <line x1="${dialX}" y1="${dialY - 40}" x2="${dialX}" y2="${dialY + 40}" stroke="#ff3b30" stroke-width="2" />
-          <circle cx="${dialX}" cy="${dialY}" r="6" fill="#ff3b30" />
-          <circle cx="${dialX}" cy="${dialY}" r="24" stroke="#ff3b30" stroke-width="1.5" stroke-dasharray="4 3" fill="none" />
-          <text x="${dialX + 32}" y="${dialY - 14}" fill="#ff3b30" font-family="monospace" font-size="16" font-weight="bold">
-            Dial Center (${dialX}, ${dialY})
-          </text>
-        </g>
+    const ns = 'http://www.w3.org/2000/svg';
+    const svgEl = (tag: string, attrs: Record<string, string | number>, text?: string) => {
+      const node = document.createElementNS(ns, tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        node.setAttribute(k, String(v));
+      }
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
 
-        <!-- Pendulum Hinge Pivot -->
-        <g id="debug-pendulum-pivot">
-          <line x1="${pendPivotX - 30}" y1="${pendPivotY}" x2="${pendPivotX + 30}" y2="${pendPivotY}" stroke="#ff9500" stroke-width="2" />
-          <line x1="${pendPivotX}" y1="${pendPivotY - 30}" x2="${pendPivotX}" y2="${pendPivotY + 30}" stroke="#ff9500" stroke-width="2" />
-          <circle cx="${pendPivotX}" cy="${pendPivotY}" r="5" fill="#ff9500" />
-          <text x="${pendPivotX + 36}" y="${pendPivotY + 5}" fill="#ff9500" font-family="monospace" font-size="16" font-weight="bold">
-            Pendulum Pivot (${pendPivotX}, ${pendPivotY})
-          </text>
-        </g>
+    const svg = svgEl('svg', {
+      viewBox: '0 0 1080 1920',
+      width: 1080,
+      height: 1920,
+      style: 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;'
+    });
 
-        <!-- Notification Zone Bounding Outline -->
-        <g id="debug-notif-outline">
-          <rect x="${notif.x}" y="${notif.y}" width="${notif.width}" height="${notif.height}" 
-            fill="none" stroke="#30d158" stroke-width="2" stroke-dasharray="6 4" opacity="0.8" />
-          <text x="${notif.x + 12}" y="${notif.y - 10}" fill="#30d158" font-family="monospace" font-size="15" font-weight="bold">
-            Notification Chamber (${notif.width}×${notif.height})
-          </text>
-        </g>
-      </svg>
-    `;
+    const dialGroup = svgEl('g', { id: 'debug-dial-crosshair' });
+    dialGroup.append(
+      svgEl('line', { x1: dialX - 40, y1: dialY, x2: dialX + 40, y2: dialY, stroke: '#ff3b30', 'stroke-width': 2 }),
+      svgEl('line', { x1: dialX, y1: dialY - 40, x2: dialX, y2: dialY + 40, stroke: '#ff3b30', 'stroke-width': 2 }),
+      svgEl('circle', { cx: dialX, cy: dialY, r: 6, fill: '#ff3b30' }),
+      svgEl('circle', { cx: dialX, cy: dialY, r: 24, stroke: '#ff3b30', 'stroke-width': 1.5, 'stroke-dasharray': '4 3', fill: 'none' }),
+      svgEl('text', { x: dialX + 32, y: dialY - 14, fill: '#ff3b30', 'font-family': 'monospace', 'font-size': 16, 'font-weight': 'bold' }, `Dial Center (${dialX}, ${dialY})`)
+    );
+
+    const pendGroup = svgEl('g', { id: 'debug-pendulum-pivot' });
+    pendGroup.append(
+      svgEl('line', { x1: pendPivotX - 30, y1: pendPivotY, x2: pendPivotX + 30, y2: pendPivotY, stroke: '#ff9500', 'stroke-width': 2 }),
+      svgEl('line', { x1: pendPivotX, y1: pendPivotY - 30, x2: pendPivotX, y2: pendPivotY + 30, stroke: '#ff9500', 'stroke-width': 2 }),
+      svgEl('circle', { cx: pendPivotX, cy: pendPivotY, r: 5, fill: '#ff9500' }),
+      svgEl('text', { x: pendPivotX + 36, y: pendPivotY + 5, fill: '#ff9500', 'font-family': 'monospace', 'font-size': 16, 'font-weight': 'bold' }, `Pendulum Pivot (${pendPivotX}, ${pendPivotY})`)
+    );
+
+    const notifGroup = svgEl('g', { id: 'debug-notif-outline' });
+    notifGroup.append(
+      svgEl('rect', { x: notif.x, y: notif.y, width: notif.width, height: notif.height, fill: 'none', stroke: '#30d158', 'stroke-width': 2, 'stroke-dasharray': '6 4', opacity: 0.8 }),
+      svgEl('text', { x: notif.x + 12, y: notif.y - 10, fill: '#30d158', 'font-family': 'monospace', 'font-size': 15, 'font-weight': 'bold' }, `Notification Chamber (${notif.width}×${notif.height})`)
+    );
+
+    svg.append(dialGroup, pendGroup, notifGroup);
+    this.crosshairsLayer.replaceChildren(svg);
   }
 
   public refreshHudModeButtons(): void {
@@ -585,6 +708,7 @@ export class DebugOverlay {
   public toggleHUD(): void {
     this.isVisible = !this.isVisible;
     this.panelElement.classList.toggle('hidden', !this.isVisible);
+    this.onVisibilityChange?.(this.isVisible);
   }
 
   public updateWSStatus(status: WSStatus, url?: string): void {

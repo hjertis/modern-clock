@@ -131,9 +131,16 @@ async function bootstrap() {
   const handSecond = document.getElementById('hand-second') as HTMLImageElement;
   const handCap = document.getElementById('hand-cap') as HTMLImageElement;
   const crosshairs = document.getElementById('debug-crosshairs') as HTMLElement;
+  const topControlPills = document.getElementById('top-control-pills') as HTMLElement | null;
   const hudTogglePill = document.getElementById('hud-toggle-pill') as HTMLButtonElement;
   const themeTogglePill = document.getElementById('theme-toggle-pill') as HTMLButtonElement;
   const themePillLabel = document.getElementById('theme-pill-label') as HTMLElement;
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const devModeEnabled = urlParams.get('dev') === '1' || urlParams.get('hud') === '1';
+  if (topControlPills) {
+    topControlPills.classList.toggle('hidden', !devModeEnabled);
+  }
 
   if (!stage || !canvas || !notificationZone || !crosshairs) {
     throw new Error('Missing required clock DOM elements');
@@ -269,8 +276,17 @@ async function bootstrap() {
       wsClient,
       themeManager,
       audioEngine,
-      sleepManager
+      sleepManager,
+      (hudVisible) => {
+        if (topControlPills) {
+          topControlPills.classList.toggle('hidden', !devModeEnabled && !hudVisible);
+        }
+      }
     );
+
+    if (urlParams.get('hud') === '1') {
+      debugOverlay.toggleHUD();
+    }
 
     // Pill button toggles HUD
     if (hudTogglePill) {

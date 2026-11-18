@@ -35,6 +35,10 @@ body.kiosk-cursor-hidden * {
   gap: 10px;
 }
 
+#top-control-pills.hidden {
+  display: none;
+}
+
 #hud-toggle-pill,
 #theme-toggle-pill {
   background: rgba(14, 17, 23, 0.78);

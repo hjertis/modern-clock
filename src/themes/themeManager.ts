@@ -245,6 +245,7 @@ export class ThemeManager {
    */
   public async initDefaultOrSavedTheme(defaultThemeId = 'pcb_2049'): Promise<Theme> {
     let targetId = defaultThemeId;
+    let fromUrlParam = false;
 
     try {
       const urlTheme =
@@ -259,6 +260,7 @@ export class ThemeManager {
 
       if (urlTheme) {
         targetId = this.resolveThemeId(urlTheme);
+        fromUrlParam = true;
       } else if (savedTheme) {
         targetId = this.resolveThemeId(savedTheme);
       }
@@ -268,18 +270,19 @@ export class ThemeManager {
 
     if (!this.registry.has(targetId)) {
       targetId = defaultThemeId;
+      fromUrlParam = false;
     }
 
-    return this.setTheme(targetId, { animateTransition: false });
+    return this.setTheme(targetId, { animateTransition: false, persist: !fromUrlParam });
   }
 
   /**
    * Switches the active theme with a smooth alpha transition and clean canvas reset,
-   * then persists the selection to localStorage.
+   * then persists the selection to localStorage (unless `persist: false`).
    */
   public async setTheme(
     themeId: string,
-    options?: { animateTransition?: boolean; config?: Partial<ThemeConfig> }
+    options?: { animateTransition?: boolean; config?: Partial<ThemeConfig>; persist?: boolean }
   ): Promise<Theme> {
     const resolvedId = this.resolveThemeId(themeId);
     const entry = this.registry.get(resolvedId);
@@ -345,12 +348,14 @@ export class ThemeManager {
       this.notificationZoneElement.style.transform = '';
     }
 
-    // 6. Persist selection to localStorage
-    try {
-      localStorage.setItem(ThemeManager.STORAGE_KEY, resolvedId);
-      localStorage.setItem(ThemeManager.LEGACY_STORAGE_KEY, resolvedId);
-    } catch {
-      // Ignore storage quota / security errors
+    // 6. Persist selection to localStorage (skipped for one-off ?theme= URL previews)
+    if (options?.persist !== false) {
+      try {
+        localStorage.setItem(ThemeManager.STORAGE_KEY, resolvedId);
+        localStorage.setItem(ThemeManager.LEGACY_STORAGE_KEY, resolvedId);
+      } catch {
+        // Ignore storage quota / security errors
+      }
     }
 
     // 7. Fade canvas back in smoothly
