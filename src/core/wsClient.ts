@@ -179,10 +179,29 @@ export class ClockWebSocketClient {
     this.url = options.url || queryWs || envWs || defaultWsUrl;
   }
 
+  public static isDemoMode(): boolean {
+    const envDemo =
+      typeof import.meta !== 'undefined' &&
+      import.meta.env &&
+      import.meta.env.VITE_STATIC_DEMO === 'true';
+    const queryDemo =
+      typeof window !== 'undefined' &&
+      typeof window.location?.search === 'string' &&
+      new URLSearchParams(window.location.search).get('demo') === '1';
+    return Boolean(envDemo || queryDemo);
+  }
+
   /**
    * Initiates the WebSocket connection to the backend daemon
    */
   public connect(newUrl?: string): void {
+    if (ClockWebSocketClient.isDemoMode() && !newUrl) {
+      this.shouldReconnect = false;
+      this.clearReconnectTimer();
+      this.setStatus('disconnected');
+      return;
+    }
+
     if (newUrl) {
       this.url = newUrl;
     }

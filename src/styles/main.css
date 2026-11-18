@@ -66,3 +66,93 @@ body.kiosk-cursor-hidden * {
   border-color: rgba(244, 196, 98, 0.65);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 12px rgba(244, 196, 98, 0.2);
 }
+
+/* Lightweight Demo Showcase Dock (rendered only when VITE_STATIC_DEMO=true or ?demo=1) */
+.demo-dock {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9997;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: calc(100vw - 24px);
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(12, 15, 22, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(244, 196, 98, 0.24);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  transition: opacity 0.45s ease;
+  opacity: 1;
+}
+
+.demo-dock.dimmed {
+  opacity: 0.18;
+}
+
+.demo-dock:hover,
+.demo-dock:focus-within {
+  opacity: 1;
+}
+
+.demo-dock-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 8px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.demo-dock-group:last-child {
+  padding-right: 0;
+  border-right: none;
+}
+
+.demo-dock-label {
+  font-size: 11px;
+  color: rgba(226, 232, 240, 0.72);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.demo-dock-select,
+.demo-dock-btn {
+  background: rgba(25, 31, 43, 0.85);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.demo-dock-select:hover,
+.demo-dock-btn:hover {
+  border-color: rgba(244, 196, 98, 0.65);
+  color: #f4c462;
+}
+
+.demo-dock-btn.active {
+  background: rgba(244, 196, 98, 0.2);
+  border-color: rgba(244, 196, 98, 0.75);
+  color: #f4c462;
+}
+
+.demo-dock-btn-accent {
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #7dd3fc;
+}
+
+.demo-dock-btn-danger {
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fca5a5;
+}

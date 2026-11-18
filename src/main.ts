@@ -7,6 +7,7 @@ import { ClockWebSocketClient } from './core/wsClient';
 import { ThemeManager } from './themes/themeManager';
 import { ClockAudioEngine } from './core/audioEngine';
 import { SleepManager, TimeSchedule } from './core/sleepManager';
+import { DemoDock, isDemoModeEnabled } from './core/demoDock';
 import { DisplayOptions } from './core/timeFormatter';
 import { NotificationPayload, Theme, ClockMode } from './types/theme';
 
@@ -286,6 +287,16 @@ async function bootstrap() {
 
     if (urlParams.get('hud') === '1') {
       debugOverlay.toggleHUD();
+    }
+
+    if (isDemoModeEnabled()) {
+      new DemoDock({
+        container: document.body,
+        themeManager,
+        sleepManager,
+        notificationManager,
+        debugOverlay
+      });
     }
 
     // Pill button toggles HUD
