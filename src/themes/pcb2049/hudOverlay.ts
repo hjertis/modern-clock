@@ -9,7 +9,24 @@ import {
   EMERALD_LOWER_RIGHT_BUS_PATHS,
   PcbThemeVariant
 } from './constants';
-import { drawAnnularVia } from './substrate';
+
+function drawAnnularVia(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  outerRadius: number,
+  holeRadius: number
+): void {
+  ctx.beginPath();
+  ctx.arc(x, y, outerRadius, 0, Math.PI * 2);
+  ctx.fillStyle = PCB_COLORS.ENIG_GOLD;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(x, y, holeRadius, 0, Math.PI * 2);
+  ctx.fillStyle = PCB_COLORS.SUBSTRATE_DARK;
+  ctx.fill();
+}
 
 interface ElectronPacket {
   path: Point2D[];

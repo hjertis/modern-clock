@@ -101,7 +101,7 @@ async function bootstrap() {
   const audioEngine = new ClockAudioEngine();
   const sleepManager = new SleepManager(stage, {
     schedule: {
-      enabled: true,
+      enabled: false,
       wakeTime: '06:30',
       nightStart: '22:00',
       sleepStart: '23:30'

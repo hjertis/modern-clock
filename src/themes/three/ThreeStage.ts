@@ -422,6 +422,47 @@ export class ThreeStage {
     this.scene.environmentIntensity = intensity;
   }
 
+  /**
+   * Converts a 2D canvas-space dial center (relative to 540, 540) into
+   * Three.js world-unit XY delta for translating `dialGroup`.
+   */
+  public static dialCenterToOffsetWorld(
+    dialCenterX: number,
+    dialCenterY: number
+  ): { x: number; y: number } {
+    return {
+      x: (dialCenterX - 540) / ThreeStage.PIXELS_PER_UNIT,
+      y: (540 - dialCenterY) / ThreeStage.PIXELS_PER_UNIT
+    };
+  }
+
+  /**
+   * Ensures the camera has no view offset so the outer 1080x1920 substrate stays locked.
+   */
+  public clearCameraViewOffset(): void {
+    this.camera.clearViewOffset();
+    this.camera.updateProjectionMatrix();
+  }
+
+  /**
+   * Generates and assigns a PMREM environment map from a custom studio scene,
+   * tracking the resulting texture and render target for deterministic disposal.
+   */
+  public setEnvironmentFromScene(envScene: THREE.Scene): void {
+    if (this.isDisposed || !this.pmremGenerator) {
+      this.disposeSceneGraph(envScene);
+      return;
+    }
+    try {
+      const envTarget = this.pmremGenerator.fromScene(envScene, 0.025, 0.1, 60);
+      this.scene.environment = envTarget.texture;
+      this.trackTexture(envTarget.texture);
+      this.trackRenderTarget(envTarget);
+    } finally {
+      this.disposeSceneGraph(envScene);
+    }
+  }
+
   public getResourceStats(): ThreeStageResourceStats {
     return {
       geometries: this.trackedGeometries.size,

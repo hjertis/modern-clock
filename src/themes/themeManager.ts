@@ -7,6 +7,7 @@ import { NixieHybridTheme } from './nixie_hybrid';
 import { Tourbillon3DTheme } from './tourbillon_3d';
 import { Reactor3DTheme } from './reactor_3d';
 import { Orrery3DTheme } from './orrery_3d';
+import { MarianaAbyssTheme } from './mariana_abyss';
 import { ClockAudioEngine } from '../core/audioEngine';
 
 export type ThemeFactory = () => Theme;
@@ -59,6 +60,7 @@ export class ThemeManager {
     this.registerTheme(() => new Tourbillon3DTheme());
     this.registerTheme(() => new Reactor3DTheme());
     this.registerTheme(() => new Orrery3DTheme());
+    this.registerTheme(() => new MarianaAbyssTheme());
   }
 
 
@@ -195,6 +197,13 @@ export class ThemeManager {
     ) {
       return 'orrery_3d';
     }
+    if (
+      cleaned === 'mariana' ||
+      cleaned === 'mariana_abyss' ||
+      cleaned === 'abyss'
+    ) {
+      return 'mariana_abyss';
+    }
 
     // Match by display name
     for (const [id, entry] of this.registry.entries()) {
@@ -305,6 +314,7 @@ export class ThemeManager {
       this.notificationZoneElement.style.top = `${nz.y}px`;
       this.notificationZoneElement.style.width = `${nz.width}px`;
       this.notificationZoneElement.style.height = `${nz.height}px`;
+      this.notificationZoneElement.style.transform = '';
     }
 
     // 6. Persist selection to localStorage

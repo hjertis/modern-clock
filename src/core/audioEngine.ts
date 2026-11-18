@@ -37,7 +37,8 @@ export type SoundProfile =
   | 'nixie_hybrid'
   | 'tourbillon_3d'
   | 'reactor_3d'
-  | 'orrery_3d';
+  | 'orrery_3d'
+  | 'mariana_abyss';
 
 export class ClockAudioEngine {
   private ctx: AudioContext | null = null;
@@ -175,6 +176,12 @@ export class ClockAudioEngine {
     ) {
       this.activeProfile = 'orrery_3d';
     } else if (
+      clean === 'mariana_abyss' ||
+      clean === 'mariana' ||
+      clean === 'abyss'
+    ) {
+      this.activeProfile = 'mariana_abyss';
+    } else if (
       clean === 'nixie_hybrid' ||
       clean === 'nixie' ||
       clean === 'nixie_chronograph'
@@ -236,7 +243,7 @@ export class ClockAudioEngine {
       this.playTourbillonEscapement(isTick);
     } else if (this.activeProfile === 'reactor_3d') {
       this.playReactorEscapement(isTick);
-    } else if (this.activeProfile === 'orrery_3d') {
+    } else if (this.activeProfile === 'orrery_3d' || this.activeProfile === 'mariana_abyss') {
       this.playOrreryEscapement(isTick);
     } else if (this.activeProfile === 'nixie_hybrid') {
       this.playNixieReedEscapement(isTick);
@@ -1229,7 +1236,7 @@ export class ClockAudioEngine {
     } else if (this.activeProfile === 'reactor_3d') {
       const count = hour % 12 || 12;
       this.playReactorContainmentChime(true, count);
-    } else if (this.activeProfile === 'orrery_3d') {
+    } else if (this.activeProfile === 'orrery_3d' || this.activeProfile === 'mariana_abyss') {
       const count = hour % 12 || 12;
       this.playOrreryObservatoryChime(true, count);
     } else if (this.activeProfile === 'nixie_hybrid') {
@@ -1263,7 +1270,7 @@ export class ClockAudioEngine {
       this.playCathedralChime(false);
     } else if (this.activeProfile === 'reactor_3d') {
       this.playReactorContainmentChime(false);
-    } else if (this.activeProfile === 'orrery_3d') {
+    } else if (this.activeProfile === 'orrery_3d' || this.activeProfile === 'mariana_abyss') {
       this.playOrreryObservatoryChime(false);
     } else if (this.activeProfile === 'nixie_hybrid') {
       this.playNixieBrassGlassChime(false);
@@ -1406,7 +1413,7 @@ export class ClockAudioEngine {
         this.playBellTone(659.25, 2.0, 0.65);
         setTimeout(() => this.playBellTone(987.77, 2.8, 0.8), 180);
       }
-    } else if (this.activeProfile === 'reactor_3d') {
+    } else if (this.activeProfile === 'reactor_3d' || this.activeProfile === 'mariana_abyss') {
       this.playTelemetryChirp(isUrgent ? 'urgent' : 'normal', false);
       if (isUrgent) {
         this.playReactorContainmentChime(false);

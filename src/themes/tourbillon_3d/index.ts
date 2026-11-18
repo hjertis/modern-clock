@@ -146,6 +146,8 @@ export class Tourbillon3DTheme implements Theme {
 
   // Dynamic mechanical sub-assemblies
   private hourHandPivot: THREE.Group | null = null;
+  private dialGroup: THREE.Group | null = null;
+  private dialBasePos = { x: 0, y: 0 };
   private minuteHandPivot: THREE.Group | null = null;
   private secondHandPivot: THREE.Group | null = null;
 
@@ -272,6 +274,7 @@ export class Tourbillon3DTheme implements Theme {
     this.setupPointerParallax();
     this.buildSceneGraph(stage);
     this.applyModeLighting();
+    stage.clearCameraViewOffset();
     stage.render();
   }
 
@@ -537,6 +540,14 @@ export class Tourbillon3DTheme implements Theme {
     backplateMesh.position.set(0, 0, -chamberD);
     backplateMesh.receiveShadow = true;
     chamberGroup.add(backplateMesh);
+
+    const surroundBacking = new THREE.Mesh(
+      new THREE.BoxGeometry(24.0, 32.0, 0.38),
+      walnutBackMaterial
+    );
+    surroundBacking.position.set(0, 0, -chamberD - 0.38);
+    surroundBacking.receiveShadow = true;
+    chamberGroup.add(surroundBacking);
 
     // Recessed circular brass-rimmed walnut movement alcove behind the upper dial
     const movementRecessRing = new THREE.Mesh(
@@ -876,6 +887,8 @@ export class Tourbillon3DTheme implements Theme {
     // =========================================================================
     const dialGroup = new THREE.Group();
     dialGroup.position.set(dialWorld.x, dialCenterY, -0.58);
+    this.dialGroup = dialGroup;
+    this.dialBasePos = { x: dialWorld.x, y: dialCenterY };
 
     // Outer stepped chamfered brass chapter bezel ring
     const outerChapterRing = new THREE.Mesh(
@@ -1466,6 +1479,14 @@ export class Tourbillon3DTheme implements Theme {
       this.lastSleepRenderTimeMs = timeData.realTimeMs;
     }
 
+    if (this.dialGroup) {
+      const offset = ThreeStage.dialCenterToOffsetWorld(
+        this.manifest.dial.center.x,
+        this.manifest.dial.center.y
+      );
+      this.dialGroup.position.x = this.dialBasePos.x + offset.x;
+      this.dialGroup.position.y = this.dialBasePos.y + offset.y;
+    }
     this.stage.render();
   }
 

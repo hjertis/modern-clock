@@ -13,6 +13,8 @@ import { NixieHybridTheme } from '../src/themes/nixie_hybrid';
 import { Tourbillon3DTheme, computeCounterweightProgress } from '../src/themes/tourbillon_3d';
 import { Reactor3DTheme } from '../src/themes/reactor_3d';
 import { Orrery3DTheme, computeOrreryEphemeris } from '../src/themes/orrery_3d';
+import { MarianaAbyssTheme } from '../src/themes/mariana_abyss';
+import { Pcb2049Theme } from '../src/themes/pcb2049';
 import { ClockAudioEngine } from '../src/core/audioEngine';
 import { ClockEngine } from '../src/core/clockEngine';
 import { ClockWebSocketClient } from '../src/core/wsClient';
@@ -1047,8 +1049,277 @@ async function runHybridBaseTests() {
 
   console.log('✓ Test 8 Passed: Celestial Astrolabe & Orrery 3D, Ephemeris, Eclipse Sleep & Disposal');
 
+  // 9. Mariana Abyss (`mariana_abyss`): 3-Zone 3D Bathysphere, Gear Train, Pressure Tubes, Aquarium & Cat Sleep
+  console.log('Test 9: Mariana Abyss (`mariana_abyss`), 3-Zone Kinematics, Sleep & Disposal');
+  assert(availableIds.includes('mariana_abyss'), 'mariana_abyss must be registered in ThemeManager');
+  const marianaDescriptor = availableDescriptors.find((d) => d.id === 'mariana_abyss');
+  assert(marianaDescriptor !== undefined);
+  assert.strictEqual(marianaDescriptor!.name, 'Mariana Abyss');
+
+  assert.strictEqual(themeManager.resolveThemeId('mariana_abyss'), 'mariana_abyss');
+  assert.strictEqual(themeManager.resolveThemeId('mariana'), 'mariana_abyss');
+  assert.strictEqual(themeManager.resolveThemeId('abyss'), 'mariana_abyss');
+  assert.strictEqual(themeManager.resolveThemeId('Mariana Abyss'), 'mariana_abyss');
+
+  const mountedMariana = (await themeManager.setTheme('mariana_abyss', {
+    animateTransition: false
+  })) as MarianaAbyssTheme;
+  assert.strictEqual(mountedMariana.id, 'mariana_abyss');
+  assert.strictEqual(mountedMariana.name, 'Mariana Abyss');
+  assert.strictEqual(audio.getSoundProfile(), 'mariana_abyss');
+
+  const marianaStage = mountedMariana.getThreeStage();
+  assert(marianaStage !== null, 'ThreeStage must be initialized for mariana_abyss');
+  assert.strictEqual(marianaStage!.width, 1080);
+  assert.strictEqual(marianaStage!.height, 1920);
+  const marianaStats = mountedMariana.getResourceStats();
+  assert(marianaStats !== null && marianaStats.geometries > 20);
+  assert(marianaStats!.materials > 10);
+
+  const mTime1 = new Date('2026-11-17T11:25:15.000');
+  const mTick1 = formatSynchronizedTime(mTime1, {
+    hourFormat: '24h',
+    showSeconds: true,
+    showDate: true
+  });
+  mountedMariana.renderPendulum(mockCtx, {
+    angleDeg: 5.0,
+    angleRad: (5.0 * Math.PI) / 180,
+    angularVelocityNorm: 0.5,
+    angularVelocityRad: 0.25,
+    phase: 0.2,
+    phaseRad: 1.25,
+    periodSeconds: 2.0,
+    maxAngleDeg: 6.0,
+    dampingFactor: 1.0,
+    dimmed: false,
+    pivot: { x: 540, y: 1136 },
+    timeSec: 15.0
+  });
+  mountedMariana.renderDial(mockCtx, {
+    date: mTime1,
+    hours: mTick1.hours24,
+    minutes: mTick1.minutes,
+    seconds: mTick1.seconds,
+    milliseconds: mTick1.milliseconds,
+    angles: mTick1.angles,
+    secondMode: 'sweep',
+    timestampMs: mTime1.getTime(),
+    realTimeMs: 1000,
+    deltaTimeSec: 0.05,
+    displayOptions: mTick1.options,
+    digitalTick: mTick1
+  });
+  // Second render after 120ms so 100ms crossfade completes
+  const mTime2 = new Date('2026-11-17T11:25:30.000');
+  const mTick2 = formatSynchronizedTime(mTime2, {
+    hourFormat: '24h',
+    showSeconds: true,
+    showDate: true
+  });
+  mountedMariana.renderDial(mockCtx, {
+    date: mTime2,
+    hours: mTick2.hours24,
+    minutes: mTick2.minutes,
+    seconds: mTick2.seconds,
+    milliseconds: mTick2.milliseconds,
+    angles: mTick2.angles,
+    secondMode: 'sweep',
+    timestampMs: mTime2.getTime(),
+    realTimeMs: 1200,
+    deltaTimeSec: 0.05,
+    displayOptions: mTick2.options,
+    digitalTick: mTick2
+  });
+
+  const mActive = mountedMariana.getDebugState();
+  assert.strictEqual(mActive.chassisVisible, true);
+  assert.strictEqual(mActive.portholeVisible, true);
+  assert.strictEqual(mActive.aquariumVisible, true);
+  assert(mActive.keyLightIntensity > 1.0);
+  assert(mActive.tubeLightIntensity > 0.5 && mActive.tubeLightIntensity <= 1.6);
+  assert.deepStrictEqual(mActive.activeDigits, ['1', '1', '2', '5', '3', '0']);
+  assert(mActive.activeFilamentEmissive > 1.0 && mActive.activeFilamentEmissive <= 1.55);
+  assert(Math.abs(mActive.bargraphFillRatio - 0.5) < 0.05);
+  assert(Math.abs(mActive.gearAnglesRad[0] - (-Math.PI)) < 0.02);
+  assert(Math.abs(mActive.gearAnglesRad[2] - (-Math.PI * 2)) < 0.02);
+  assert(mActive.sonarSweepRad !== 0);
+
+  // Sleep (Cat Mode): extinguishes all lights, hides chassis/glass/water/creatures,
+  // leaves ONLY active 3D numeral cathode filaments dimly glowing at ~12-15%
+  mountedMariana.onEvent({ type: 'mode_change', payload: { mode: 'sleep' } });
+  mountedMariana.renderPendulum(mockCtx, {
+    angleDeg: 0,
+    angleRad: 0,
+    angularVelocityNorm: 0,
+    angularVelocityRad: 0,
+    phase: 0,
+    phaseRad: 0,
+    periodSeconds: 2.0,
+    maxAngleDeg: 6.0,
+    dampingFactor: 0,
+    dimmed: false,
+    pivot: { x: 540, y: 1136 },
+    timeSec: 0
+  });
+  mountedMariana.renderDial(mockCtx, {
+    date: mTime2,
+    hours: mTick2.hours24,
+    minutes: mTick2.minutes,
+    seconds: mTick2.seconds,
+    milliseconds: mTick2.milliseconds,
+    angles: mTick2.angles,
+    secondMode: 'sweep',
+    timestampMs: mTime2.getTime(),
+    realTimeMs: 2500,
+    deltaTimeSec: 0.05,
+    displayOptions: mTick2.options,
+    digitalTick: mTick2
+  });
+
+  const mSleep = mountedMariana.getDebugState();
+  assert.strictEqual(mSleep.isSleepActive, true);
+  assert.strictEqual(mSleep.chassisVisible, false);
+  assert.strictEqual(mSleep.portholeVisible, false);
+  assert.strictEqual(mSleep.aquariumVisible, false);
+  assert.strictEqual(mSleep.keyLightIntensity, 0);
+  assert.strictEqual(mSleep.tubeLightIntensity, 0);
+  assert(
+    mSleep.activeFilamentEmissive >= 0.12 && mSleep.activeFilamentEmissive <= 0.15,
+    `Sleep filament emissive (${mSleep.activeFilamentEmissive}) must be in ~12-15% range`
+  );
+
+  // Switching away from mariana_abyss cleanly disposes all GPU resources
+  await themeManager.setTheme('pcb_2049', { animateTransition: false });
+  const marianaDisposed = marianaStage!.getResourceStats();
+  assert.strictEqual(marianaDisposed.disposed, true);
+  assert.strictEqual(marianaDisposed.geometries, 0);
+  assert.strictEqual(marianaDisposed.materials, 0);
+  assert.strictEqual(marianaDisposed.textures, 0);
+  assert.strictEqual(marianaDisposed.renderTargets, 0);
+
+  console.log('✓ Test 9 Passed: Mariana Abyss 3D, Gear Train, Pressure Tubes, Aquarium, Cat Sleep & Disposal');
+
+  // 10. PCB-2049 3D Three.js Scene (`pcb_2049`), Emerald LPI Stackup, Kapton Flex, Wafer Shader, Cat Sleep & Disposal
+  console.log('Test 10: PCB-2049 3D Three.js Scene (`pcb_2049`), Emerald Stackup, Kapton Flex, Cat Sleep & Disposal');
+  const mountedPcb = (await themeManager.setTheme('pcb_2049', {
+    animateTransition: false
+  })) as Pcb2049Theme;
+  assert.strictEqual(mountedPcb.id, 'pcb_2049');
+
+  const pcbStage = mountedPcb.getThreeStage();
+  assert(pcbStage !== null, 'ThreeStage must be initialized for pcb_2049');
+  assert.strictEqual(pcbStage!.width, 1080);
+  assert.strictEqual(pcbStage!.height, 1920);
+  assert.strictEqual(pcbStage!.fov, 35);
+
+  const pcbStats = pcbStage!.getResourceStats();
+  assert(pcbStats.geometries > 20, 'PCB-2049 3D must track scene geometries');
+  assert(pcbStats.materials > 10, 'PCB-2049 3D must track scene materials');
+  assert(pcbStats.textures >= 3, 'PCB-2049 3D must track LPI relief, silkscreen & PMREM textures');
+  assert.strictEqual(pcbStats.disposed, false);
+
+  const pcbTime1 = new Date(2026, 10, 17, 13, 15, 30, 0);
+  const pcbTick1 = formatSynchronizedTime(
+    pcbTime1,
+    { hourFormat: '24h', showSeconds: true, showDate: true },
+    'sweep'
+  );
+  const testSwingRad = (4.5 * Math.PI) / 180;
+  mountedPcb.renderPendulum(mockCtx, {
+    angleDeg: 4.5,
+    angleRad: testSwingRad,
+    angularVelocityNorm: 0.4,
+    angularVelocityRad: 0.15,
+    phase: 0.25,
+    phaseRad: Math.PI * 0.5,
+    periodSeconds: 2.0,
+    maxAngleDeg: 6.0,
+    dampingFactor: 1.0,
+    dimmed: false,
+    pivot: { x: 540, y: 990 },
+    timeSec: 1.5
+  });
+  mountedPcb.renderDial(mockCtx, {
+    date: pcbTime1,
+    hours: pcbTime1.getHours(),
+    minutes: pcbTime1.getMinutes(),
+    seconds: pcbTime1.getSeconds(),
+    milliseconds: 0,
+    angles: pcbTick1.angles,
+    secondMode: 'sweep',
+    timestampMs: pcbTime1.getTime(),
+    realTimeMs: 1500,
+    deltaTimeSec: 0.016,
+    displayOptions: pcbTick1.options,
+    digitalTick: pcbTick1
+  });
+
+  const pcbActive = mountedPcb.getDebugState();
+  assert.strictEqual(pcbActive.isSleepActive, false);
+  assert.strictEqual(pcbActive.boardVisible, true);
+  assert.strictEqual(pcbActive.pendulumVisible, true);
+  assert.strictEqual(pcbActive.bloomThreshold, 0.92);
+  assert.strictEqual(pcbActive.bloomStrength, 0.6);
+  assert(Math.abs(pcbActive.pendulumAngleRad - testSwingRad) < 1e-6);
+  assert(pcbActive.handEmissiveIntensity > 1.5);
+
+  // Switch to Sleep (Cat Mode)
+  mountedPcb.onEvent({ type: 'mode_change', payload: { mode: 'sleep' } });
+  mountedPcb.renderPendulum(mockCtx, {
+    angleDeg: 4.5,
+    angleRad: testSwingRad,
+    angularVelocityNorm: 0.4,
+    angularVelocityRad: 0.15,
+    phase: 0.25,
+    phaseRad: Math.PI * 0.5,
+    periodSeconds: 2.0,
+    maxAngleDeg: 6.0,
+    dampingFactor: 0.0,
+    dimmed: false,
+    pivot: { x: 540, y: 990 },
+    timeSec: 2.5
+  });
+  mountedPcb.renderDial(mockCtx, {
+    date: pcbTime1,
+    hours: pcbTime1.getHours(),
+    minutes: pcbTime1.getMinutes(),
+    seconds: pcbTime1.getSeconds(),
+    milliseconds: 0,
+    angles: pcbTick1.angles,
+    secondMode: 'sweep',
+    timestampMs: pcbTime1.getTime(),
+    realTimeMs: 2600,
+    deltaTimeSec: 0.05,
+    displayOptions: pcbTick1.options,
+    digitalTick: pcbTick1
+  });
+
+  const pcbSleep = mountedPcb.getDebugState();
+  assert.strictEqual(pcbSleep.isSleepActive, true);
+  assert.strictEqual(pcbSleep.boardVisible, false);
+  assert.strictEqual(pcbSleep.pendulumVisible, false);
+  assert.strictEqual(pcbSleep.keyLightIntensity, 0);
+  assert.strictEqual(pcbSleep.handPointLightIntensity, 0);
+  assert.strictEqual(pcbSleep.pendulumAngleRad, 0);
+  assert(
+    pcbSleep.handEmissiveIntensity >= 0.12 && pcbSleep.handEmissiveIntensity <= 0.15,
+    `Sleep hand emissive (${pcbSleep.handEmissiveIntensity}) must be in ~12-15% range`
+  );
+
+  // Switching away from pcb_2049 cleanly disposes all GPU resources
+  await themeManager.setTheme('vienna_classic', { animateTransition: false });
+  const pcbDisposed = pcbStage!.getResourceStats();
+  assert.strictEqual(pcbDisposed.disposed, true);
+  assert.strictEqual(pcbDisposed.geometries, 0);
+  assert.strictEqual(pcbDisposed.materials, 0);
+  assert.strictEqual(pcbDisposed.textures, 0);
+  assert.strictEqual(pcbDisposed.renderTargets, 0);
+
+  console.log('✓ Test 10 Passed: PCB-2049 3D Three.js Scene, Emerald LPI Stackup, Kapton Flex, Cat Sleep & Disposal');
+
   console.log('==================================================');
-  console.log('🎉 ALL HYBRID, NIXIE, TOURBILLON, REACTOR & ORRERY 3D TESTS PASSED! (8/8 Test Suites)');
+  console.log('🎉 ALL 10 TEST SUITES PASSED! (10/10 Test Suites)');
   console.log('==================================================');
 }
 

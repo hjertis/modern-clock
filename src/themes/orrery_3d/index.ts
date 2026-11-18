@@ -221,6 +221,8 @@ export class Orrery3DTheme implements Theme {
 
   // Astrolabe Dial Hands
   private hourHandPivot: THREE.Group | null = null;
+  private dialGroup: THREE.Group | null = null;
+  private dialBasePos = { x: 0, y: 0 };
   private minuteHandPivot: THREE.Group | null = null;
   private secondHandPivot: THREE.Group | null = null;
 
@@ -320,6 +322,7 @@ export class Orrery3DTheme implements Theme {
     this.buildSceneGraph(stage);
     this.applyEphemerisToScene(this.lastEphemeris);
     this.applyModeTargets(true);
+    stage.clearCameraViewOffset();
     stage.render();
   }
 
@@ -564,6 +567,14 @@ export class Orrery3DTheme implements Theme {
     backplate.receiveShadow = true;
     chamberGroup.add(backplate);
 
+    const surroundBacking = new THREE.Mesh(
+      new THREE.BoxGeometry(24.0, 32.0, 0.36),
+      walnutFrameMaterial
+    );
+    surroundBacking.position.set(0, 0, -chamberD - 0.36);
+    surroundBacking.receiveShadow = true;
+    chamberGroup.add(surroundBacking);
+
     const splayLR = THREE.MathUtils.degToRad(14);
     const splayTB = THREE.MathUtils.degToRad(12);
     const wallSlabT = 0.54;
@@ -772,6 +783,8 @@ export class Orrery3DTheme implements Theme {
     // =========================================================================
     const dialGroup = new THREE.Group();
     dialGroup.position.set(dialWorld.x, dialWorld.y, -1.55);
+    this.dialGroup = dialGroup;
+    this.dialBasePos = { x: dialWorld.x, y: dialWorld.y };
 
     // Recessed obsidian dial backing ring + graduated astronomical brass bezel
     const outerBezel = new THREE.Mesh(
@@ -1507,6 +1520,14 @@ export class Orrery3DTheme implements Theme {
       this.currentMode = this.targetMode;
     }
 
+    if (this.dialGroup) {
+      const offset = ThreeStage.dialCenterToOffsetWorld(
+        this.manifest.dial.center.x,
+        this.manifest.dial.center.y
+      );
+      this.dialGroup.position.x = this.dialBasePos.x + offset.x;
+      this.dialGroup.position.y = this.dialBasePos.y + offset.y;
+    }
     this.stage.render();
   }
 

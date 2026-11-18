@@ -14,6 +14,7 @@ export type ThemeId =
   | 'tourbillon_3d'
   | 'reactor_3d'
   | 'orrery_3d'
+  | 'mariana_abyss'
   | string;
 
 export interface ThemeConfig {
