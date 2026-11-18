@@ -2,6 +2,9 @@
 
 An open-source, local-first **Digital Grandfather Clock** web engine designed to run on a portrait **1080 × 1920** display (e.g. wall-mounted kiosk screens, smart home dashboards, Raspberry Pi, or embedded displays).
 
+> ### 🚀 [**Launch Live Interactive Demo → `hjertis.github.io/modern-clock`**](https://hjertis.github.io/modern-clock/)
+> Switch themes, preview `Active` / `Night` / `Sleep` presence modes, and trigger sample doorbell & security notifications directly in your browser.
+
 Built with **Vanilla ES6+ TypeScript** and **Vite** with **zero runtime dependencies** for minimal CPU/memory footprint on low-power hardware.
 
 ---
