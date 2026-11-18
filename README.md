@@ -3,6 +3,7 @@
 An open-source, local-first **Digital Grandfather Clock** web engine designed to run on a portrait **1080 × 1920** display (e.g. wall-mounted kiosk screens, smart home dashboards, Raspberry Pi, or embedded displays).
 
 > ### 🚀 [**Launch Live Interactive Demo → `hjertis.github.io/modern-clock`**](https://hjertis.github.io/modern-clock/)
+>
 > Switch themes, preview `Active` / `Night` / `Sleep` presence modes, and trigger sample doorbell & security notifications directly in your browser.
 
 Built with **Vanilla ES6+ TypeScript** and **Vite** with **zero runtime dependencies** for minimal CPU/memory footprint on low-power hardware.
@@ -40,10 +41,12 @@ The system strictly decouples the clock engine from visual themes:
 ## 📐 Fixed 1080 × 1920 Canvas Reference
 
 The internal coordinate space is strictly fixed at **1080 × 1920 (portrait)**:
+
 - During development on desktop monitors, CSS containment auto-scales the canvas using hardware-accelerated transforms to fit any viewport while preserving the native 1080 × 1920 internal coordinate system.
 - On a native 1080 × 1920 kiosk display or in fullscreen (`F11`), the canvas renders 1:1 pixel-perfect.
 
 ### Layered DOM Hierarchy
+
 ```
 Layer 7: Debug Overlay & Calibration Crosshairs (#debug-crosshairs)
 Layer 6: Pinion / Center Cap (#hand-cap)
@@ -106,6 +109,7 @@ Every theme resides in `themes/<theme-name>/` (and mirrored in `public/themes/<t
 ```
 
 ### Dynamic Placement Engine Math
+
 1. **Dial Alignment**: Centered directly over `dial.center` in canvas coordinates.
 2. **Hand Rotation**: Positioned at `left = dial.center.x - pivot.x`, `top = dial.center.y - pivot.y` with `transform-origin: ${pivot.x}px ${pivot.y}px`. The hand rotates precisely around the dial center without drifting.
 3. **Pendulum Hinge**: Positioned at `left = pendulum.pivot.x - anchor.x`, `top = pendulum.pivot.y - anchor.y` with `transform-origin: ${anchor.x}px ${anchor.y}px`.
@@ -122,10 +126,10 @@ The engine exposes a public API at `window.clock`:
 ```javascript
 // Trigger a notification (e.g. from Home Assistant, Webhook, or MQTT script)
 window.clock.notify({
-  title: 'Front Doorbell',
-  message: 'Motion detected at front entrance — package arrived.',
-  category: 'doorbell', // 'doorbell' | 'alert' | 'calendar' | 'weather' | 'info'
-  timeoutMs: 6500
+  title: "Front Doorbell",
+  message: "Motion detected at front entrance — package arrived.",
+  category: "doorbell", // 'doorbell' | 'alert' | 'calendar' | 'weather' | 'info'
+  timeoutMs: 6500,
 });
 
 // Toggle between discrete ticking and continuous sweep
@@ -142,6 +146,7 @@ While notifications are displayed in the glance chamber, the pendulum behind it 
 ## 🛠️ Developer Debug & Calibration HUD
 
 Press **`H`** on your keyboard (or click the floating pill button) to open the HUD:
+
 - **Live Dial Calibration**: Sliders and numeric inputs to live-tweak `dial.center.x` and `dial.center.y`.
 - **Live Pivot Calibration**: Tweak `pivot.x` and `pivot.y` for hour, minute, and second hands.
 - **Pendulum Tuning**: Adjust hinge pivot, anchor, oscillation period $T$, and max amplitude $\theta_{\max}$.
@@ -153,21 +158,26 @@ Press **`H`** on your keyboard (or click the floating pill button) to open the H
 ## 🚀 Getting Started
 
 ### 1. Install Dependencies
+
 ```bash
 npm install
 ```
 
 ### 2. Run the Development Server
+
 ```bash
 npm run dev
 ```
+
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### 3. Build for Production
+
 ```bash
 npm run build
 npm run preview
 ```
+
 Output is bundled cleanly into `dist/`.
 
 ---
@@ -177,11 +187,13 @@ Output is bundled cleanly into `dist/`.
 The backend ingestion daemon connects local MQTT sensors/Home Assistant and external HTTP webhooks directly to the portrait frontend over WebSockets.
 
 ### Start with Docker Compose
+
 ```bash
 MQTT_HOST=192.168.1.50 docker compose -f compose.yaml up -d --build
 ```
 
 ### Test Alert Delivery via cURL
+
 ```bash
 curl -X POST http://localhost:8088/api/notify \
   -H "Content-Type: application/json" \
@@ -193,24 +205,24 @@ curl -X POST http://localhost:8088/api/notify \
     "durationMs": 8000
   }'
 ```
-*(If `API_TOKEN` is configured, include `-H "Authorization: Bearer <API_TOKEN>"`.)*
+
+_(If `API_TOKEN` is configured, include `-H "Authorization: Bearer <API_TOKEN>"`.)_
 
 ### Environment Variables
-| Variable | Default | Description |
-| :--- | :--- | :--- |
-| `PORT` | `8088` | HTTP & WebSocket listen port |
-| `STATIC_DIR` | `./static` | Directory serving the built frontend bundle |
-| `RUST_LOG` | `grandfather_clock_backend=info,tower_http=info` | Structured log filter |
-| `API_TOKEN` | *(unset)* | Optional Bearer token for `POST /api/notify`, `POST /api/config`, and authenticated `/ws` `register_themes` |
-| `ALLOWED_ORIGINS` | *(unset / same-origin)* | Comma-separated CORS & WebSocket `Origin` allowlist |
-| `MQTT_HOST` / `MQTT_BROKER_HOST` | `127.0.0.1` (`mosquitto` in `compose.yaml`) | MQTT broker hostname or IP |
-| `MQTT_PORT` / `MQTT_BROKER_PORT` | `1883` | MQTT broker port |
-| `MQTT_CLIENT_ID` | `<prefix>_backend_<pid>` | MQTT client identifier |
-| `MQTT_USER` / `MQTT_USERNAME` | *(unset)* | Optional MQTT username |
-| `MQTT_PASS` / `MQTT_PASSWORD` | *(unset)* | Optional MQTT password |
-| `MQTT_PREFIX` | `grandfather_clock` | Base MQTT topic prefix |
-| `VITE_WS_URL` | *(auto from `window.location.host`)* | Optional build-time WebSocket URL override for frontend |
 
-See [`backend/README.md`](file:///c:/mhj/git/modern-clock/backend/README.md) for full endpoint specifications, MQTT topics, and WebSocket schemas.
+| Variable                         | Default                                          | Description                                                                                                 |
+| :------------------------------- | :----------------------------------------------- | :---------------------------------------------------------------------------------------------------------- |
+| `PORT`                           | `8088`                                           | HTTP & WebSocket listen port                                                                                |
+| `STATIC_DIR`                     | `./static`                                       | Directory serving the built frontend bundle                                                                 |
+| `RUST_LOG`                       | `grandfather_clock_backend=info,tower_http=info` | Structured log filter                                                                                       |
+| `API_TOKEN`                      | _(unset)_                                        | Optional Bearer token for `POST /api/notify`, `POST /api/config`, and authenticated `/ws` `register_themes` |
+| `ALLOWED_ORIGINS`                | _(unset / same-origin)_                          | Comma-separated CORS & WebSocket `Origin` allowlist                                                         |
+| `MQTT_HOST` / `MQTT_BROKER_HOST` | `127.0.0.1` (`mosquitto` in `compose.yaml`)      | MQTT broker hostname or IP                                                                                  |
+| `MQTT_PORT` / `MQTT_BROKER_PORT` | `1883`                                           | MQTT broker port                                                                                            |
+| `MQTT_CLIENT_ID`                 | `<prefix>_backend_<pid>`                         | MQTT client identifier                                                                                      |
+| `MQTT_USER` / `MQTT_USERNAME`    | _(unset)_                                        | Optional MQTT username                                                                                      |
+| `MQTT_PASS` / `MQTT_PASSWORD`    | _(unset)_                                        | Optional MQTT password                                                                                      |
+| `MQTT_PREFIX`                    | `grandfather_clock`                              | Base MQTT topic prefix                                                                                      |
+| `VITE_WS_URL`                    | _(auto from `window.location.host`)_             | Optional build-time WebSocket URL override for frontend                                                     |
 
-
+See [`backend/README.md`](backend/README.md) for full endpoint specifications, MQTT topics, and WebSocket schemas.
