@@ -13,32 +13,32 @@ export const VIENNA_CLASSIC_MANIFEST: ThemeManifest = {
   name: 'Vienna Classic',
   version: '1.0.0',
   author: 'Maker',
-  background: '/themes/default/assets/case_back.svg',
+  background: './themes/default/assets/case_back.svg',
   dial: {
-    image: '/themes/default/assets/dial.svg',
+    image: './themes/default/assets/dial.svg',
     center: { x: 540, y: 540 }
   },
   hands: {
     hour: {
-      image: '/themes/default/assets/hand_hour.svg',
+      image: './themes/default/assets/hand_hour.svg',
       pivot: { x: 20, y: 280 }
     },
     minute: {
-      image: '/themes/default/assets/hand_minute.svg',
+      image: './themes/default/assets/hand_minute.svg',
       pivot: { x: 16, y: 420 }
     },
     second: {
-      image: '/themes/default/assets/hand_second.svg',
+      image: './themes/default/assets/hand_second.svg',
       pivot: { x: 8, y: 420 },
       mode: 'tick'
     },
     cap: {
-      image: '/themes/default/assets/cap.svg',
+      image: './themes/default/assets/cap.svg',
       center: { x: 25, y: 25 }
     }
   },
   pendulum: {
-    image: '/themes/default/assets/pendulum.svg',
+    image: './themes/default/assets/pendulum.svg',
     pivot: { x: 540, y: 820 },
     anchor: { x: 50, y: 20 },
     periodSeconds: 2.0,
@@ -427,15 +427,27 @@ export class ViennaClassicTheme implements Theme {
     ctx.restore();
   }
 
+  private resolveAssetUrl(url: string): string {
+    if (/^(https?:|data:|blob:)/i.test(url)) return url;
+    const base =
+      (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) || './';
+    const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+    return `${normalizedBase}${url.replace(/^\.?\//, '')}`;
+  }
+
   private loadImage(url: string): Promise<HTMLImageElement | null> {
+    if (typeof Image === 'undefined') {
+      return Promise.resolve(null);
+    }
+    const resolvedUrl = this.resolveAssetUrl(url);
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => resolve(img);
       img.onerror = () => {
-        console.warn(`[ViennaClassicTheme] Failed to load asset: ${url}`);
+        console.warn(`[ViennaClassicTheme] Failed to load asset: ${resolvedUrl}`);
         resolve(null);
       };
-      img.src = url;
+      img.src = resolvedUrl;
     });
   }
 }

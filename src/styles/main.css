@@ -79,9 +79,11 @@ body.kiosk-cursor-hidden * {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  width: max-content;
   max-width: calc(100vw - 24px);
+  box-sizing: border-box;
   padding: 8px 12px;
-  border-radius: 999px;
+  border-radius: 20px;
   background: rgba(12, 15, 22, 0.82);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -103,8 +105,11 @@ body.kiosk-cursor-hidden * {
 
 .demo-dock-group {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  max-width: 100%;
   padding-right: 8px;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -133,6 +138,22 @@ body.kiosk-cursor-hidden * {
   font-family: inherit;
   cursor: pointer;
   transition: all 0.18s ease;
+  max-width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .demo-dock {
+    bottom: 10px;
+    padding: 8px 10px;
+    gap: 6px;
+    border-radius: 16px;
+  }
+
+  .demo-dock-group {
+    padding-right: 0;
+    border-right: none;
+  }
 }
 
 .demo-dock-select:hover,

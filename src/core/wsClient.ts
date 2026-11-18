@@ -636,7 +636,10 @@ export class ClockWebSocketClient {
         return;
       }
       try {
-        const manifest = await this.themeLoader.loadTheme(`/themes/${themeId}/theme.json`);
+        const base =
+          (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) || './';
+        const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+        const manifest = await this.themeLoader.loadTheme(`${normalizedBase}themes/${themeId}/theme.json`);
         this.clockEngine.setManifest(manifest);
       } catch (err) {
         console.error(`[Clock WS] Failed to switch theme via ThemeLoader to '${themeId}':`, err);

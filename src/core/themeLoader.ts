@@ -35,12 +35,18 @@ export class ThemeLoader {
   }
 
   /**
-   * Loads a theme from a given directory or JSON URL (e.g. 'themes/default' or '/themes/default/theme.json')
+   * Loads a theme from a given directory or JSON URL (e.g. 'themes/default' or './themes/default/theme.json')
    */
   public async loadTheme(themePathOrUrl: string): Promise<ThemeManifest> {
     let manifestUrl = themePathOrUrl;
     if (!manifestUrl.endsWith('.json')) {
       manifestUrl = `${themePathOrUrl.replace(/\/+$/, '')}/theme.json`;
+    }
+    if (!/^(https?:|data:|blob:)/i.test(manifestUrl)) {
+      const base =
+        (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) || './';
+      const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+      manifestUrl = `${normalizedBase}${manifestUrl.replace(/^\.?\//, '')}`;
     }
 
     // Determine theme base path
