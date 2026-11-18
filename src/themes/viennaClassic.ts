@@ -5,7 +5,8 @@ import {
   TimeData,
   PhysicsData,
   TelemetryData,
-  ThemeEvent
+  ThemeEvent,
+  ThemeNotificationStyle
 } from './types';
 
 export const VIENNA_CLASSIC_MANIFEST: ThemeManifest = {
@@ -88,6 +89,23 @@ export class ViennaClassicTheme implements Theme {
 
   public getManifest(): ThemeManifest {
     return this.manifest;
+  }
+
+  public getNotificationStyle(): Partial<ThemeNotificationStyle> {
+    return {
+      background: 'rgba(18, 14, 11, 0.88)',
+      borderColor: 'rgba(220, 180, 110, 0.38)',
+      borderWidth: '1.5px',
+      borderRadius: '16px',
+      textColor: '#f7eedb',
+      mutedTextColor: 'rgba(245, 235, 220, 0.65)',
+      accentColor: '#d4aa55',
+      doorbellAccent: '#e6b85c',
+      alertAccent: '#d9483b',
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+      boxShadow: '0 16px 40px rgba(0, 0, 0, 0.75), 0 0 20px rgba(212, 170, 85, 0.15)',
+      cornerStyle: 'rounded'
+    };
   }
 
   public async mount(_canvasContext: CanvasRenderingContext2D, config?: ThemeConfig): Promise<void> {

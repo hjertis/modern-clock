@@ -40,6 +40,7 @@ export class NotificationManager {
   public setMode(mode: ClockMode): void {
     const prevMode = this.clockMode;
     this.clockMode = mode;
+    this.zoneElement.setAttribute?.('data-presence-mode', mode);
     if (
       (prevMode === 'night' || prevMode === 'sleep') &&
       (mode === 'active' || mode === 'silent')
@@ -88,12 +89,26 @@ export class NotificationManager {
       priority === 'urgent' ||
       priority === 'high' ||
       priority === 'critical' ||
-      payload.category === 'alert';
-    const isUrgent = isHighOrCritical;
+      payload.category === 'alert' ||
+      payload.category === 'securityAlert' ||
+      payload.category === 'doorbell';
+    const isCriticalSleepToast =
+      payload.category === 'doorbell' ||
+      payload.category === 'securityAlert' ||
+      payload.category === 'alert' ||
+      priority === 'critical' ||
+      priority === 'urgent';
+    const isUrgent =
+      priority === 'urgent' ||
+      priority === 'high' ||
+      priority === 'critical' ||
+      payload.category === 'alert' ||
+      payload.category === 'securityAlert';
     const category = payload.category || (isUrgent ? 'alert' : 'info');
 
-    // 1. In 'sleep' mode: suppress visual notification toasts
-    if (this.clockMode === 'sleep') {
+    // 1. In 'sleep' mode (Cat-Safe 1 FPS): suppress non-critical info toasts completely;
+    // allow critical doorbell / securityAlert toasts in ultra-low-glare ember style.
+    if (this.clockMode === 'sleep' && !isCriticalSleepToast) {
       this.queuedNotifications.push({ ...payload, id });
       return id;
     }
@@ -106,7 +121,13 @@ export class NotificationManager {
 
     // Create card element
     const card = document.createElement('div');
-    card.className = `notification-card ${category} ${isUrgent ? 'priority-urgent' : 'priority-normal'}`;
+    const presenceClass =
+      this.clockMode === 'sleep'
+        ? 'presence-sleep'
+        : this.clockMode === 'night'
+          ? 'presence-night'
+          : '';
+    card.className = `notification-card ${category} ${isUrgent ? 'priority-urgent' : 'priority-normal'}${presenceClass ? ` ${presenceClass}` : ''}`;
     card.setAttribute('data-id', id);
 
     const timeStr = (payload.timestamp || new Date()).toLocaleTimeString([], {
@@ -168,11 +189,22 @@ export class NotificationManager {
 
     // Trigger theme-adaptive procedural telemetry chirp / chime
     const effectivePriority: 'normal' | 'urgent' = isUrgent ? 'urgent' : 'normal';
-    this.audioEngine?.playNotificationAlert(payload.priority || effectivePriority, category);
+    this.audioEngine?.playNotificationAlert(
+      payload.priority || effectivePriority,
+      category === 'securityAlert' ? 'alert' : category
+    );
 
     // Emit reactive theme event so active theme can pulse lateral trace buses
+    const eventType: ThemeEvent['type'] =
+      category === 'doorbell'
+        ? 'doorbell'
+        : category === 'securityAlert'
+          ? 'securityAlert'
+          : isUrgent
+            ? 'priority_alert'
+            : 'notification';
     const themeEvent: ThemeEvent = {
-      type: isUrgent ? 'priority_alert' : 'notification',
+      type: eventType,
       priority: isUrgent ? 'urgent' : 'normal',
       category,
       payload,
@@ -242,6 +274,7 @@ export class NotificationManager {
       case 'doorbell':
         return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>`;
       case 'alert':
+      case 'securityAlert':
         return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
       case 'calendar':
         return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`;

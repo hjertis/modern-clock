@@ -34,6 +34,7 @@ Each template already implements the full `ClockTheme` lifecycle:
 - `setPresenceMode(mode)` — Handles `'active'`, `'silent'`, `'night'` (30 FPS), and `'sleep'` (Cat-Safe 1 FPS).
 - `setDialCenter(x, y)` — Translates `dialGroup` relative to `(540, 540)` without moving the camera or full-screen background.
 - `onEvent(event)` — Responds to `doorbell`, `securityAlert`, and `mode_change` events (normalized via `classifyThemeEvent(event)`).
+- `getNotificationStyle?()` — *(Optional)* Returns partial `ThemeNotificationStyle` overrides (`background`, `borderColor`, `borderWidth`, `borderRadius`, `textColor`, `mutedTextColor`, `accentColor`, `doorbellAccent`, `alertAccent`, `fontFamily`, `boxShadow`, `backdropFilter`, `cornerStyle`, `headerLabel`). Missing fields fall back to the default dark-glass palette via `resolveNotificationStyle(theme)`.
 - `dispose()` — Cleans up WebGL geometries, materials, textures, and stage resources.
 
 Use the shared utilities in `src/themes/helpers.ts`:
@@ -47,6 +48,7 @@ Use the shared utilities in `src/themes/helpers.ts`:
 | `applySleepModeIsolation(mode, targets)` | Hides non-emissive groups while keeping `dialGroup`, `handsGroup`, and `emissiveIndicatorMeshes` visible above black-crush in Sleep mode. |
 | `drawStandard2DBackground(ctx, fillStyle)` | Fills `1080×1920` plus `±500 px` bleed margins (`-500, -500, 2080, 2920`). |
 | `classifyThemeEvent(event)` | Normalizes events into `'doorbell' \| 'securityAlert' \| 'mode_change' \| 'other'`. |
+| `resolveNotificationStyle(theme)` | Merges `manifest.notificationStyle` and `theme.getNotificationStyle()` onto `DEFAULT_NOTIFICATION_STYLE` for `--notif-*` CSS variables. |
 
 ### Step 3: Register in the Theme Registry
 
@@ -85,3 +87,4 @@ this.registerTheme(() => new MyCustomTheme());
 | **Sleep (Cat-Safe) Isolation** | `dialGroup.visible = true`, `handsGroup.visible = true` | Never set `visible = false` on a parent of `handsGroup`. Keep `emissiveIndicatorMeshes` visible with `depthTest = false` over `#000000` black-crush. |
 | **Telemetry Events** | `doorbell`, `securityAlert`, `mode_change` | Handle via `classifyThemeEvent(event)` inside `onEvent(event)`. |
 | **HUD Calibration Controls** | `#input-dial-x`, `#input-dial-y`, `#btn-reset-dial-center` | Debug HUD (`H` key) updates `manifest.dial.center.x/y` in real time; `adaptClockThemeToTheme` forwards changes to `setDialCenter(x, y)`. |
+| **Themeable Notifications** | `getNotificationStyle()` / `manifest.notificationStyle` | `ThemeManager` applies `--notif-bg`, `--notif-border`, `--notif-radius`, `--notif-text`, `--notif-muted`, `--notif-accent`, `--notif-font`, `--notif-shadow`, and `--notif-blur` on `#clock-stage` (and dims/switches to `#993810` on `#000000` in `night`/`sleep` modes). |

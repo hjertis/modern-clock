@@ -7,6 +7,7 @@ import {
   Theme,
   ThemeConfig,
   ThemeEvent,
+  ThemeNotificationStyle,
   TimeData
 } from './types';
 
@@ -335,6 +336,39 @@ export function createDefaultManifest(
   };
 }
 
+export const DEFAULT_NOTIFICATION_STYLE: ThemeNotificationStyle = {
+  background: 'rgba(12, 14, 18, 0.88)',
+  borderColor: 'rgba(244, 196, 98, 0.55)',
+  borderWidth: '1.5px',
+  borderRadius: '10px',
+  textColor: '#e8e2d0',
+  mutedTextColor: 'rgba(232, 226, 208, 0.65)',
+  accentColor: '#f4c462',
+  doorbellAccent: '#ffb838',
+  alertAccent: '#ff3b30',
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+  boxShadow: '0 18px 44px rgba(0, 0, 0, 0.85), 0 0 24px rgba(244, 196, 98, 0.24)',
+  backdropFilter: 'blur(22px) saturate(160%)',
+  cornerStyle: 'rounded'
+};
+
+/**
+ * Resolves a theme's notification toast styling by merging optional
+ * `manifest.notificationStyle` and `theme.getNotificationStyle()` overrides
+ * onto the clean default dark-glass fallback.
+ */
+export function resolveNotificationStyle(
+  theme?: ClockTheme | Theme | null
+): ThemeNotificationStyle {
+  const manifestOverrides = theme?.getManifest?.()?.notificationStyle;
+  const methodOverrides = theme?.getNotificationStyle?.();
+  return {
+    ...DEFAULT_NOTIFICATION_STYLE,
+    ...manifestOverrides,
+    ...methodOverrides
+  };
+}
+
 /**
  * Type guard distinguishing the unified `ClockTheme` interface from legacy `Theme`.
  */
@@ -418,6 +452,13 @@ export function adaptClockThemeToTheme(clockTheme: ClockTheme): Theme {
 
     ...(clockTheme.getManifest
       ? { getManifest: (): ThemeManifest => clockTheme.getManifest!() }
+      : {}),
+
+    ...(clockTheme.getNotificationStyle
+      ? {
+          getNotificationStyle: (): Partial<ThemeNotificationStyle> =>
+            clockTheme.getNotificationStyle!()
+        }
       : {})
   };
 }

@@ -15,40 +15,110 @@
   pointer-events: auto;
 }
 
-/* Base Notification Card Component */
+/* Base Notification Card Component (driven by --notif-* CSS custom properties) */
 .notification-card {
   position: relative;
   width: 100%;
-  background: rgba(12, 14, 18, 0.88);
-  backdrop-filter: blur(22px) saturate(160%);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
-  border: 1.5px solid rgba(244, 196, 98, 0.55);
-  border-radius: 10px;
+  background: var(--notif-bg, rgba(12, 14, 18, 0.88));
+  backdrop-filter: var(--notif-blur, blur(22px) saturate(160%));
+  -webkit-backdrop-filter: var(--notif-blur, blur(22px) saturate(160%));
+  border: var(--notif-border, 1.5px solid rgba(244, 196, 98, 0.55));
+  border-radius: var(--notif-radius, 10px);
   padding: 22px 26px;
   box-sizing: border-box;
-  color: #e8e2d0;
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.85),
-              0 0 24px rgba(244, 196, 98, 0.24),
-              inset 0 0 18px rgba(200, 150, 62, 0.08);
+  color: var(--notif-text, #e8e2d0);
+  font-family: var(--notif-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  box-shadow: var(
+    --notif-shadow,
+    0 18px 44px rgba(0, 0, 0, 0.85),
+    0 0 24px rgba(244, 196, 98, 0.24)
+  );
   transform: translateY(40px) scale(0.95);
   opacity: 0;
-  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1),
-              opacity 0.4s ease,
-              border-color 0.3s ease,
-              box-shadow 0.3s ease;
+  transition:
+    transform 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.4s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
   cursor: pointer;
   overflow: hidden;
 }
 
-/* Translucent PCB Circuit Backing Pattern inside Toast */
+/* Corner Style Variants */
+#clock-stage[data-notif-corner-style="sharp"] .notification-card {
+  border-radius: 0;
+}
+
+#clock-stage[data-notif-corner-style="chamfered"] .notification-card {
+  border-radius: 0;
+  clip-path: polygon(
+    14px 0,
+    calc(100% - 14px) 0,
+    100% 14px,
+    100% calc(100% - 14px),
+    calc(100% - 14px) 100%,
+    14px 100%,
+    0 calc(100% - 14px),
+    0 14px
+  );
+}
+
+/* Riveted / Bracket Corner Accents (e.g. Mariana Abyss) */
+#clock-stage[data-notif-corner-style="brackets"] .notification-card::before,
+#clock-stage[data-notif-corner-style="brackets"] .notification-card::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 0 0, var(--notif-border-color, var(--notif-accent, #7a6236)) 3px, transparent 3.5px),
+    radial-gradient(circle at 100% 0, var(--notif-border-color, var(--notif-accent, #7a6236)) 3px, transparent 3.5px),
+    radial-gradient(circle at 0 100%, var(--notif-border-color, var(--notif-accent, #7a6236)) 3px, transparent 3.5px),
+    radial-gradient(circle at 100% 100%, var(--notif-border-color, var(--notif-accent, #7a6236)) 3px, transparent 3.5px);
+  opacity: 0.9;
+}
+
+#clock-stage[data-notif-corner-style="brackets"] .notification-card::after {
+  inset: 0;
+  background: none;
+  border: 2px solid transparent;
+  box-shadow:
+    inset 10px 0 0 -8px var(--notif-accent, #38f8ff),
+    inset -10px 0 0 -8px var(--notif-accent, #38f8ff);
+  opacity: 0.35;
+}
+
+/* Optional Header OSD Label (e.g. "// OSD NOTICE" for Vector Oscilloscope) */
+#clock-stage[data-notif-header-label]:not([data-notif-header-label=""]) .notification-header::before {
+  content: attr(data-notif-header-label);
+  position: absolute;
+  top: -14px;
+  left: 0;
+  font-size: 11px;
+  letter-spacing: 1.4px;
+  color: var(--notif-muted, rgba(184, 255, 208, 0.7));
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+#clock-stage[data-notif-header-label]:not([data-notif-header-label=""]) .notification-card {
+  padding-top: 28px;
+}
+
+/* Translucent PCB Circuit Backing Pattern inside Toast (shown for PCB themes) */
 .notification-circuit-trace {
+  display: none;
   position: absolute;
   inset: 0;
   pointer-events: none;
   opacity: 0.22;
   background-image:
-    radial-gradient(circle at 14px 14px, #f4c462 2px, transparent 2.5px),
-    radial-gradient(circle at calc(100% - 14px) calc(100% - 14px), #f4c462 2px, transparent 2.5px),
+    radial-gradient(circle at 14px 14px, var(--notif-accent, #f4c462) 2px, transparent 2.5px),
+    radial-gradient(
+      circle at calc(100% - 14px) calc(100% - 14px),
+      var(--notif-accent, #f4c462) 2px,
+      transparent 2.5px
+    ),
     repeating-linear-gradient(
       45deg,
       rgba(200, 150, 62, 0.14) 0px,
@@ -65,17 +135,9 @@
     );
 }
 
-/* Vienna Classic Overrides */
-#clock-stage[data-theme="vienna_classic"] .notification-card {
-  background: rgba(18, 14, 11, 0.88);
-  border-radius: 16px;
-  border-color: rgba(220, 180, 110, 0.38);
-  color: #f7eedb;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 20px rgba(212, 170, 85, 0.15);
-}
-
-#clock-stage[data-theme="vienna_classic"] .notification-circuit-trace {
-  display: none;
+#clock-stage[data-theme="pcb_2049"] .notification-circuit-trace,
+#clock-stage[data-theme="pcb_2049_emerald"] .notification-circuit-trace {
+  display: block;
 }
 
 .notification-card.visible {
@@ -89,26 +151,52 @@
   transition: transform 0.4s cubic-bezier(0.7, 0, 0.84, 0), opacity 0.35s ease;
 }
 
-/* Glowing Amber & Crimson Borders for PCB-2049 Alert Toasts */
-.notification-card.doorbell,
-.notification-card.info {
-  border-color: rgba(244, 196, 98, 0.75);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.85),
-              0 0 28px rgba(244, 196, 98, 0.32),
-              inset 0 0 16px rgba(244, 196, 98, 0.1);
+/* Category & Priority Accent Overrides */
+.notification-card.doorbell {
+  --notif-accent: var(--notif-doorbell-accent, #ffb838);
+  border-color: var(--notif-doorbell-accent, #ffb838);
 }
 
 .notification-card.alert,
+.notification-card.securityAlert,
 .notification-card.priority-urgent {
-  border-color: rgba(255, 59, 48, 0.88);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.9),
-              0 0 36px rgba(255, 59, 48, 0.45),
-              inset 0 0 22px rgba(255, 59, 48, 0.16);
+  --notif-accent: var(--notif-alert-accent, #ff3b30);
+  border-color: var(--notif-alert-accent, #ff3b30);
+  box-shadow:
+    var(--notif-shadow, 0 18px 48px rgba(0, 0, 0, 0.9)),
+    0 0 28px color-mix(in srgb, var(--notif-alert-accent, #ff3b30) 45%, transparent);
 }
 
-.notification-card.calendar {
-  border-color: rgba(244, 196, 98, 0.65);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(244, 196, 98, 0.25);
+/* Presence Mode: Night (dim notification opacity/glow to 55%) */
+#clock-stage[data-presence-mode="night"] .notification-card.visible,
+#notification-zone[data-presence-mode="night"] .notification-card.visible,
+.notification-card.presence-night.visible {
+  opacity: 0.55;
+  filter: brightness(0.85);
+}
+
+/* Presence Mode: Sleep (Cat-Safe 1 FPS) - Ultra-low-glare #993810 ember text on #000000, zero glow */
+#clock-stage[data-presence-mode="sleep"] .notification-card,
+#notification-zone[data-presence-mode="sleep"] .notification-card,
+.notification-card.presence-sleep {
+  background: #000000 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid #993810 !important;
+  color: #993810 !important;
+  box-shadow: none !important;
+  --notif-bg: #000000;
+  --notif-text: #993810;
+  --notif-muted: #993810;
+  --notif-accent: #993810;
+  --notif-doorbell-accent: #993810;
+  --notif-alert-accent: #993810;
+}
+
+#clock-stage[data-presence-mode="sleep"] .notification-circuit-trace,
+#notification-zone[data-presence-mode="sleep"] .notification-circuit-trace,
+.notification-card.presence-sleep .notification-circuit-trace {
+  display: none;
 }
 
 /* Header */
@@ -133,51 +221,25 @@
   justify-content: center;
   width: 34px;
   height: 34px;
-  border-radius: 6px;
-  background: rgba(244, 196, 98, 0.16);
-  border: 1px solid rgba(244, 196, 98, 0.4);
-  color: #f4c462;
-}
-
-.doorbell .notification-icon {
-  background: rgba(255, 184, 56, 0.2);
-  border-color: rgba(255, 184, 56, 0.5);
-  color: #ffb838;
-}
-
-.alert .notification-icon,
-.priority-urgent .notification-icon {
-  background: rgba(255, 59, 48, 0.22);
-  border-color: rgba(255, 59, 48, 0.6);
-  color: #ff6961;
+  border-radius: calc(var(--notif-radius, 10px) * 0.6);
+  background: color-mix(in srgb, var(--notif-accent, #f4c462) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--notif-accent, #f4c462) 45%, transparent);
+  color: var(--notif-accent, #f4c462);
 }
 
 .notification-title {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--notif-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
   font-size: 21px;
   font-weight: 700;
   letter-spacing: 0.6px;
-  color: #f4c462;
+  color: var(--notif-accent, #f4c462);
   text-transform: uppercase;
 }
 
-.alert .notification-title,
-.priority-urgent .notification-title {
-  color: #ff6961;
-}
-
-#clock-stage[data-theme="vienna_classic"] .notification-title {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  font-size: 24px;
-  font-weight: 600;
-  color: #fffaf0;
-  text-transform: none;
-}
-
 .notification-time {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--notif-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
   font-size: 15px;
-  color: rgba(232, 226, 208, 0.65);
+  color: var(--notif-muted, rgba(232, 226, 208, 0.65));
   margin-right: 32px;
 }
 
@@ -190,16 +252,10 @@
 
 .notification-message {
   margin: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--notif-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
   font-size: 18px;
   line-height: 1.45;
-  color: #e8e2d0;
-}
-
-#clock-stage[data-theme="vienna_classic"] .notification-message {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  font-size: 20px;
-  color: rgba(245, 235, 220, 0.9);
+  color: var(--notif-text, #e8e2d0);
 }
 
 /* Close Button */
@@ -210,10 +266,10 @@
   z-index: 2;
   width: 30px;
   height: 30px;
-  border-radius: 6px;
-  border: 1px solid rgba(244, 196, 98, 0.25);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(232, 226, 208, 0.75);
+  border-radius: calc(var(--notif-radius, 10px) * 0.6);
+  border: 1px solid color-mix(in srgb, var(--notif-accent, #f4c462) 30%, transparent);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--notif-muted, rgba(232, 226, 208, 0.75));
   font-size: 15px;
   cursor: pointer;
   display: flex;
@@ -223,9 +279,9 @@
 }
 
 .notification-close:hover {
-  background: rgba(244, 196, 98, 0.2);
-  border-color: rgba(244, 196, 98, 0.65);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--notif-accent, #f4c462) 20%, transparent);
+  border-color: var(--notif-accent, #f4c462);
+  color: var(--notif-text, #ffffff);
 }
 
 /* Progress bar for auto-timeout */
@@ -234,15 +290,10 @@
   bottom: 0;
   left: 0;
   height: 3px;
-  background: linear-gradient(90deg, #c8963e, #f4c462, #ffe599);
+  background: var(--notif-accent, #f4c462);
   width: 100%;
   transform-origin: left;
   animation: progressDrain linear forwards;
-}
-
-.alert .notification-progress,
-.priority-urgent .notification-progress {
-  background: linear-gradient(90deg, #ff3b30, #ff9500);
 }
 
 @keyframes progressDrain {

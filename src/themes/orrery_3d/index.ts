@@ -7,7 +7,8 @@ import {
   TimeData,
   PhysicsData,
   TelemetryData,
-  ThemeEvent
+  ThemeEvent,
+  ThemeNotificationStyle
 } from '../types';
 import { ThreeStage, ThreeStageResourceStats } from '../three/ThreeStage';
 import { createWalnutWoodMaps } from '../tourbillon_3d/geometries';
@@ -239,6 +240,25 @@ export class Orrery3DTheme implements Theme {
 
   public getManifest(): ThemeManifest {
     return this.manifest;
+  }
+
+  public getNotificationStyle(): Partial<ThemeNotificationStyle> {
+    return {
+      background: 'rgba(10, 14, 34, 0.88)',
+      borderColor: '#c9a34e',
+      borderWidth: '1.5px',
+      borderRadius: '12px',
+      textColor: '#f3ebd3',
+      mutedTextColor: 'rgba(243, 235, 211, 0.65)',
+      accentColor: '#e2be67',
+      doorbellAccent: '#ffd166',
+      alertAccent: '#ff4d4f',
+      fontFamily: "Georgia, 'Times New Roman', serif",
+      boxShadow:
+        '0 18px 44px rgba(2, 4, 14, 0.88), 0 0 24px rgba(201, 163, 78, 0.22), inset 0 0 16px rgba(201, 163, 78, 0.1)',
+      backdropFilter: 'blur(20px) saturate(140%)',
+      cornerStyle: 'rounded'
+    };
   }
 
   public getThreeStage(): ThreeStage | null {

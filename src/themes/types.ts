@@ -104,6 +104,31 @@ export interface ThemeEvent {
 
 export type ThemeRendererType = '2d' | 'three';
 
+export type ThemeNotificationCornerStyle = 'sharp' | 'rounded' | 'chamfered' | 'brackets';
+
+/**
+ * Themeable styling tokens for the on-screen notification / toast system.
+ * Themes only need to return partial overrides; missing fields fall back
+ * to the default dark-glass palette via `resolveNotificationStyle()`.
+ */
+export interface ThemeNotificationStyle {
+  background: string;
+  borderColor: string;
+  borderWidth: string;
+  borderRadius: string;
+  textColor: string;
+  mutedTextColor: string;
+  accentColor: string;
+  doorbellAccent: string;
+  alertAccent: string;
+  fontFamily: string;
+  boxShadow: string;
+  backdropFilter: string;
+  cornerStyle?: ThemeNotificationCornerStyle;
+  /** Optional prefix/badge label rendered in the toast header (e.g. '// OSD NOTICE') */
+  headerLabel?: string;
+}
+
 /**
  * Standardized ClockTheme interface for new 2D Canvas and Three.js themes.
  * Reduces boilerplate by unifying lifecycle, presence modes, dial calibration,
@@ -140,6 +165,9 @@ export interface ClockTheme {
 
   /** Optional theme geometry manifest for HUD calibration compatibility */
   getManifest?(): ThemeManifest;
+
+  /** Optional theme-specific notification toast styling overrides */
+  getNotificationStyle?(): Partial<ThemeNotificationStyle>;
 }
 
 /**
@@ -172,5 +200,8 @@ export interface Theme {
 
   /** Optional theme geometry manifest for calibration HUD compatibility */
   getManifest?(): ThemeManifest;
+
+  /** Optional theme-specific notification toast styling overrides */
+  getNotificationStyle?(): Partial<ThemeNotificationStyle>;
 }
 

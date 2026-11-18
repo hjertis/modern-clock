@@ -5,10 +5,12 @@ import {
   applySleepModeIsolation,
   classifyThemeEvent,
   computeBleedRect,
+  DEFAULT_NOTIFICATION_STYLE,
   dialCenterToPixelOffset,
   dialCenterToWorldOffset,
   isClockTheme,
   isStandardZLayerOrderValid,
+  resolveNotificationStyle,
   STANDARD_Z_LAYERS
 } from '../src/themes/helpers';
 import { ThemeManager } from '../src/themes/themeManager';
@@ -56,12 +58,23 @@ function createMockCanvasContext(fillRectCalls: Array<[number, number, number, n
 }
 
 function createMockStageElement() {
+  const attributes = new Map<string, string>();
+  const styleMap = new Map<string, string>();
   return {
-    setAttribute: () => {},
+    setAttribute: (k: string, v: string) => attributes.set(k, v),
+    getAttribute: (k: string) => attributes.get(k) ?? null,
     prepend: () => {},
     removeChild: () => {},
-    style: {}
-  } as unknown as HTMLElement;
+    style: {
+      setProperty: (k: string, v: string) => styleMap.set(k, v),
+      getPropertyValue: (k: string) => styleMap.get(k) ?? ''
+    },
+    _attributes: attributes,
+    _styleMap: styleMap
+  } as unknown as HTMLElement & {
+    _attributes: Map<string, string>;
+    _styleMap: Map<string, string>;
+  };
 }
 
 function createMockTimeData(): TimeData {
@@ -296,6 +309,105 @@ async function runTests() {
     'VectorOscilloscopeTheme must draw full 1080x1920 background with ±500 px bleed margins'
   );
   scopeTheme.dispose();
+
+  // 9. Themeable Notification Style resolution & CSS custom properties on ThemeManager
+  assert.deepStrictEqual(resolveNotificationStyle(null), DEFAULT_NOTIFICATION_STYLE);
+  const t2dForNotif = new Template2DTheme();
+  assert.deepStrictEqual(resolveNotificationStyle(t2dForNotif), DEFAULT_NOTIFICATION_STYLE);
+
+  const manifestStyledTheme: any = {
+    id: 'manifest_styled',
+    name: 'Manifest Styled',
+    renderer: '2d',
+    init: () => {},
+    update: () => {},
+    resize: () => {},
+    setPresenceMode: () => {},
+    setDialCenter: () => {},
+    onEvent: () => {},
+    dispose: () => {},
+    getManifest: () => ({
+      name: 'Manifest Styled',
+      version: '1.0.0',
+      author: 'Test',
+      background: '',
+      dial: { image: '', center: { x: 540, y: 540 } },
+      hands: {
+        hour: { image: '', pivot: { x: 0, y: 0 } },
+        minute: { image: '', pivot: { x: 0, y: 0 } },
+        second: { image: '', pivot: { x: 0, y: 0 }, mode: 'sweep' },
+        cap: { image: '', center: { x: 540, y: 540 } }
+      },
+      pendulum: {
+        image: '',
+        pivot: { x: 540, y: 990 },
+        anchor: { x: 540, y: 990 },
+        periodSeconds: 2,
+        maxAngleDeg: 6
+      },
+      notificationZone: { x: 110, y: 1280, width: 860, height: 460 },
+      notificationStyle: {
+        background: '#112233',
+        accentColor: '#44ccff'
+      }
+    })
+  };
+  const resolvedFromManifest = resolveNotificationStyle(manifestStyledTheme);
+  assert.strictEqual(resolvedFromManifest.background, '#112233');
+  assert.strictEqual(resolvedFromManifest.accentColor, '#44ccff');
+  assert.strictEqual(resolvedFromManifest.textColor, DEFAULT_NOTIFICATION_STYLE.textColor);
+
+  const stageEl = createMockStageElement();
+  const notifCanvas = {
+    width: 1080,
+    height: 1920,
+    style: {},
+    getContext: () => createMockCanvasContext()
+  } as unknown as HTMLCanvasElement;
+  const notifThemeMgr = new ThemeManager(notifCanvas, stageEl);
+
+  await notifThemeMgr.setTheme('vector_oscilloscope', { animateTransition: false });
+  assert.strictEqual(stageEl._styleMap.get('--notif-bg'), '#030a06');
+  assert.strictEqual(stageEl._styleMap.get('--notif-border'), '1px solid #1aff66');
+  assert.strictEqual(stageEl._styleMap.get('--notif-radius'), '0px');
+  assert.strictEqual(stageEl._styleMap.get('--notif-text'), '#b8ffd0');
+  assert.strictEqual(stageEl._styleMap.get('--notif-shadow'), '0 0 12px rgba(26, 255, 102, 0.25)');
+  assert.strictEqual(stageEl._attributes.get('data-notif-corner-style'), 'sharp');
+  assert.strictEqual(stageEl._attributes.get('data-notif-header-label'), '// OSD NOTICE');
+
+  // Doorbell & securityAlert state overrides
+  notifThemeMgr.dispatchEvent({ type: 'doorbell' });
+  assert.strictEqual(stageEl._styleMap.get('--notif-accent'), '#ffd166');
+  notifThemeMgr.dispatchEvent({ type: 'securityAlert' });
+  assert.strictEqual(stageEl._styleMap.get('--notif-accent'), '#ff3b30');
+
+  // Sleep mode overrides to #993810 on #000000 with zero glow
+  notifThemeMgr.dispatchEvent({ type: 'mode_change', payload: { mode: 'sleep' } });
+  assert.strictEqual(stageEl._attributes.get('data-presence-mode'), 'sleep');
+  assert.strictEqual(stageEl._styleMap.get('--notif-bg'), '#000000');
+  assert.strictEqual(stageEl._styleMap.get('--notif-text'), '#993810');
+  assert.strictEqual(stageEl._styleMap.get('--notif-shadow'), 'none');
+
+  // Returning to active restores theme styling
+  notifThemeMgr.setPresenceMode('active');
+  assert.strictEqual(stageEl._styleMap.get('--notif-bg'), '#030a06');
+  assert.strictEqual(stageEl._styleMap.get('--notif-text'), '#b8ffd0');
+
+  // Switch to mariana_abyss, pcb_2049_emerald, orrery_3d
+  await notifThemeMgr.setTheme('mariana_abyss', { animateTransition: false });
+  assert.strictEqual(stageEl._styleMap.get('--notif-bg'), 'rgba(6, 22, 30, 0.88)');
+  assert.strictEqual(stageEl._styleMap.get('--notif-accent'), '#38f8ff');
+  assert.strictEqual(stageEl._attributes.get('data-notif-corner-style'), 'brackets');
+
+  await notifThemeMgr.setTheme('pcb_2049_emerald', { animateTransition: false });
+  assert.strictEqual(stageEl._styleMap.get('--notif-bg'), 'rgba(9, 30, 21, 0.90)');
+  assert.strictEqual(stageEl._styleMap.get('--notif-accent'), '#f4c462');
+
+  await notifThemeMgr.setTheme('orrery_3d', { animateTransition: false });
+  assert.strictEqual(stageEl._styleMap.get('--notif-bg'), 'rgba(10, 14, 34, 0.88)');
+  assert.strictEqual(stageEl._styleMap.get('--notif-accent'), '#e2be67');
+
+  notifThemeMgr.getActiveTheme()?.destroy();
 
   console.log('✓ All Theme Architecture & Template tests passed!');
 }

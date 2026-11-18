@@ -1,6 +1,11 @@
-import { ThemeManifest } from '../types/theme';
-import { ClockTheme, Theme, ThemeConfig, ThemeEvent } from './types';
-import { adaptClockThemeToTheme, isClockTheme } from './helpers';
+import { ClockMode, ThemeManifest } from '../types/theme';
+import { ClockTheme, Theme, ThemeConfig, ThemeEvent, ThemeNotificationStyle } from './types';
+import {
+  adaptClockThemeToTheme,
+  classifyThemeEvent,
+  isClockTheme,
+  resolveNotificationStyle
+} from './helpers';
 import { ViennaClassicTheme } from './viennaClassic';
 import { Pcb2049Theme } from './pcb2049';
 import { HybridBaseTheme } from './hybrid_base';
@@ -35,6 +40,7 @@ export class ThemeManager {
   private themeChangeListeners: Array<(theme: Theme, manifest: ThemeManifest | null) => void> = [];
   private themeRegistryListeners: Array<(themes: ThemeDescriptor[]) => void> = [];
   private isTransitioning = false;
+  private presenceMode: ClockMode = 'active';
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -324,6 +330,9 @@ export class ThemeManager {
 
     await nextTheme.mount(this.ctx, mountConfig);
 
+    // 4b. Apply theme-specific notification CSS custom properties to stage root
+    this.applyNotificationStyleVars();
+
     // 5. Sync notification zone bounds from theme manifest
     const manifest = this.getActiveManifest();
     if (manifest && this.notificationZoneElement) {
@@ -393,9 +402,95 @@ export class ThemeManager {
   }
 
   /**
+   * Updates the active presence mode and refreshes `--notif-*` CSS custom properties
+   * on the stage root.
+   */
+  public setPresenceMode(mode: ClockMode): void {
+    this.presenceMode = mode;
+    this.applyNotificationStyleVars();
+  }
+
+  public getPresenceMode(): ClockMode {
+    return this.presenceMode;
+  }
+
+  /**
+   * Resolves the active theme's `ThemeNotificationStyle` and writes `--notif-*`
+   * CSS custom properties onto the stage root element.
+   */
+  public applyNotificationStyleVars(eventOverride?: 'doorbell' | 'securityAlert'): void {
+    const resolved: ThemeNotificationStyle = resolveNotificationStyle(this.activeTheme);
+    const setProp = (name: string, value: string) => {
+      this.stageElement.style?.setProperty?.(name, value);
+    };
+    const setAttr = (name: string, value: string) => {
+      this.stageElement.setAttribute?.(name, value);
+    };
+
+    setAttr('data-presence-mode', this.presenceMode);
+    setAttr('data-notif-corner-style', resolved.cornerStyle || 'rounded');
+    setAttr('data-notif-header-label', resolved.headerLabel || '');
+
+    if (this.presenceMode === 'sleep') {
+      setProp('--notif-bg', '#000000');
+      setProp('--notif-border-color', '#993810');
+      setProp('--notif-border-width', '1px');
+      setProp('--notif-border', '1px solid #993810');
+      setProp('--notif-radius', resolved.borderRadius);
+      setProp('--notif-text', '#993810');
+      setProp('--notif-muted', '#993810');
+      setProp('--notif-accent', '#993810');
+      setProp('--notif-doorbell-accent', '#993810');
+      setProp('--notif-alert-accent', '#993810');
+      setProp('--notif-font', resolved.fontFamily);
+      setProp('--notif-shadow', 'none');
+      setProp('--notif-blur', 'none');
+      return;
+    }
+
+    const activeAccent =
+      eventOverride === 'doorbell'
+        ? resolved.doorbellAccent
+        : eventOverride === 'securityAlert'
+          ? resolved.alertAccent
+          : resolved.accentColor;
+
+    const activeBorderColor =
+      eventOverride === 'doorbell'
+        ? resolved.doorbellAccent
+        : eventOverride === 'securityAlert'
+          ? resolved.alertAccent
+          : resolved.borderColor;
+
+    setProp('--notif-bg', resolved.background);
+    setProp('--notif-border-color', activeBorderColor);
+    setProp('--notif-border-width', resolved.borderWidth);
+    setProp('--notif-border', `${resolved.borderWidth} solid ${activeBorderColor}`);
+    setProp('--notif-radius', resolved.cornerStyle === 'sharp' ? '0px' : resolved.borderRadius);
+    setProp('--notif-text', resolved.textColor);
+    setProp('--notif-muted', resolved.mutedTextColor);
+    setProp('--notif-accent', activeAccent);
+    setProp('--notif-doorbell-accent', resolved.doorbellAccent);
+    setProp('--notif-alert-accent', resolved.alertAccent);
+    setProp('--notif-font', resolved.fontFamily);
+    setProp('--notif-shadow', resolved.boxShadow);
+    setProp('--notif-blur', resolved.backdropFilter);
+  }
+
+  /**
    * Dispatches a reactive event (e.g., WebSocket notification pulse) to the active theme.
    */
   public dispatchEvent(event: ThemeEvent): void {
+    const classified = classifyThemeEvent(event);
+    if (classified === 'mode_change' && event.payload && 'mode' in event.payload) {
+      const mode = (event.payload as { mode?: ClockMode }).mode;
+      if (mode) {
+        this.presenceMode = mode;
+        this.applyNotificationStyleVars();
+      }
+    } else if (classified === 'doorbell' || classified === 'securityAlert') {
+      this.applyNotificationStyleVars(classified);
+    }
     this.activeTheme?.onEvent(event);
   }
 

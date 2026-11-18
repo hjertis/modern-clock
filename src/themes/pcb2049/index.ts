@@ -6,7 +6,8 @@ import {
   TimeData,
   PhysicsData,
   TelemetryData,
-  ThemeEvent
+  ThemeEvent,
+  ThemeNotificationStyle
 } from '../types';
 import { ThreeStage, ThreeStageResourceStats } from '../three/ThreeStage';
 import {
@@ -124,6 +125,25 @@ export class Pcb2049Theme implements Theme {
 
   public getManifest(): ThemeManifest {
     return this.manifest;
+  }
+
+  public getNotificationStyle(): Partial<ThemeNotificationStyle> {
+    const isEmerald = this.variant === 'emerald';
+    return {
+      background: isEmerald ? 'rgba(9, 30, 21, 0.90)' : 'rgba(12, 14, 18, 0.88)',
+      borderColor: isEmerald ? 'rgba(244, 196, 98, 0.65)' : 'rgba(244, 196, 98, 0.55)',
+      borderWidth: '1.5px',
+      borderRadius: '4px',
+      textColor: '#e8e2d0',
+      mutedTextColor: 'rgba(232, 226, 208, 0.62)',
+      accentColor: '#f4c462',
+      doorbellAccent: isEmerald ? '#ff8533' : '#ffb838',
+      alertAccent: '#ff3b30',
+      boxShadow: isEmerald
+        ? '0 18px 44px rgba(4, 9, 7, 0.9), 0 0 24px rgba(244, 196, 98, 0.22), inset 0 0 18px rgba(19, 61, 43, 0.45)'
+        : '0 18px 44px rgba(0, 0, 0, 0.85), 0 0 24px rgba(244, 196, 98, 0.24), inset 0 0 18px rgba(200, 150, 62, 0.08)',
+      cornerStyle: 'chamfered'
+    };
   }
 
   public getThreeStage(): ThreeStage | null {

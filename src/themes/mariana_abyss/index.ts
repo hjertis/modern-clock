@@ -11,6 +11,7 @@ import {
   Theme,
   ThemeConfig,
   ThemeEvent,
+  ThemeNotificationStyle,
   TimeData
 } from '../types';
 import { ThreeStage, ThreeStageResourceStats } from '../three/ThreeStage';
@@ -166,6 +167,24 @@ export class MarianaAbyssTheme implements Theme {
 
   public getManifest(): ThemeManifest {
     return this.manifest;
+  }
+
+  public getNotificationStyle(): Partial<ThemeNotificationStyle> {
+    return {
+      background: 'rgba(6, 22, 30, 0.88)',
+      borderColor: '#7a6236',
+      borderWidth: '1.5px',
+      borderRadius: '4px',
+      textColor: '#d9f6ff',
+      mutedTextColor: 'rgba(164, 212, 248, 0.68)',
+      accentColor: '#38f8ff',
+      doorbellAccent: '#38f8ff',
+      alertAccent: '#ff4757',
+      boxShadow:
+        '0 16px 40px rgba(0, 0, 0, 0.85), 0 0 20px rgba(56, 248, 255, 0.18), inset 0 0 18px rgba(122, 98, 54, 0.18)',
+      backdropFilter: 'blur(18px) saturate(150%)',
+      cornerStyle: 'brackets'
+    };
   }
 
   public getThreeStage(): ThreeStage | null {

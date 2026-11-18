@@ -3,6 +3,7 @@ import {
   ClockTheme,
   ThemeConfig,
   ThemeEvent,
+  ThemeNotificationStyle,
   TimeData
 } from '../types';
 import {
@@ -249,6 +250,25 @@ export class VectorOscilloscopeTheme implements ClockTheme {
 
   public getManifest(): ThemeManifest {
     return this.manifest;
+  }
+
+  public getNotificationStyle(): Partial<ThemeNotificationStyle> {
+    return {
+      background: '#030a06',
+      borderColor: '#1aff66',
+      borderWidth: '1px',
+      borderRadius: '0px',
+      textColor: '#b8ffd0',
+      mutedTextColor: 'rgba(184, 255, 208, 0.68)',
+      accentColor: '#1aff66',
+      doorbellAccent: '#ffd166',
+      alertAccent: '#ff3b30',
+      fontFamily: "'Courier New', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+      boxShadow: '0 0 12px rgba(26, 255, 102, 0.25)',
+      backdropFilter: 'none',
+      cornerStyle: 'sharp',
+      headerLabel: '// OSD NOTICE'
+    };
   }
 
   public getPresenceMode(): ClockMode {

@@ -1,3 +1,5 @@
+import type { ThemeNotificationStyle } from '../themes/types';
+
 export type HandMode = 'tick' | 'sweep';
 export type ClockMode = 'active' | 'silent' | 'night' | 'sleep';
 export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent' | 'critical';
@@ -54,6 +56,7 @@ export interface ThemeManifest {
   hands: HandsConfig;
   pendulum: PendulumConfig;
   notificationZone: NotificationZoneConfig;
+  notificationStyle?: Partial<ThemeNotificationStyle>;
 }
 
 export interface NotificationPayload {
@@ -62,16 +65,19 @@ export interface NotificationPayload {
   message: string;
   timeoutMs?: number;
   priority?: NotificationPriority;
-  category?: 'alert' | 'info' | 'doorbell' | 'calendar' | 'weather';
+  category?: 'alert' | 'info' | 'doorbell' | 'calendar' | 'weather' | 'securityAlert';
   timestamp?: Date;
 }
 
 export type {
   Theme,
+  ClockTheme,
   ThemeId,
   ThemeConfig,
   TimeData,
   PhysicsData,
   TelemetryData,
-  ThemeEvent
+  ThemeEvent,
+  ThemeNotificationStyle,
+  ThemeNotificationCornerStyle
 } from '../themes/types';
